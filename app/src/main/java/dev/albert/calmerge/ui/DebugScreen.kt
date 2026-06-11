@@ -89,13 +89,13 @@ fun DebugScreen(viewModel: MainViewModel) {
             }
         }
 
-        item {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Text("Merged events (${events.size})", style = MaterialTheme.typography.titleMedium)
-        }
-
         // FR-13: rows sharing a dedupeGroupId render once, badged with every account.
         val collapsed = collapseDuplicates(events)
+
+        item {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            Text("Merged events (${collapsed.size})", style = MaterialTheme.typography.titleMedium)
+        }
         items(collapsed, key = { it.first.event.id }) { (primary, allAccounts) ->
             EventRow(primary, allAccounts)
         }
@@ -189,7 +189,11 @@ private fun IcsDialog(onConfirm: (String, String) -> Unit, onDismiss: () -> Unit
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(name, url) }, enabled = url.startsWith("https://")) { Text("Add") }
+            // http is permitted only for the emulator host alias in debug builds
+            // (see src/debug network_security_config); real feeds must be https.
+            val urlOk = url.startsWith("https://") ||
+                (dev.albert.calmerge.BuildConfig.DEBUG && url.startsWith("http://10.0.2.2"))
+            TextButton(onClick = { onConfirm(name, url) }, enabled = urlOk) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
