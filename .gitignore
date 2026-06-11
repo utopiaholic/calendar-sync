@@ -1,0 +1,15 @@
+# Gradle
+.gradle/
+build/
+app/build/
+.kotlin/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+local.properties
+captures/
+
+# Secrets — client IDs live in source placeholders; never commit filled-in ICS URLs or keystores
+*.keystore
+*.jks
