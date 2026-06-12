@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,7 +49,6 @@ import com.calmerge.app.ui.theme.OnSlateSecondary
 import com.calmerge.app.ui.theme.SlateDark3
 import com.calmerge.app.ui.theme.SlateSurface
 import com.calmerge.app.ui.theme.TealAccent
-import com.calmerge.app.ui.theme.glassCard
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -362,24 +359,6 @@ fun HomeScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-    }
-}
-
-@Composable
-private fun BentoCard(
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
-    minHeight: androidx.compose.ui.unit.Dp = 120.dp,
-    content: @Composable () -> Unit,
-) {
-    Box(
-        modifier = modifier
-            .glassCard(cornerRadius = 16.dp, fillAlpha = 0.08f)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(16.dp)
-            .heightIn(min = minHeight),
-    ) {
-        Column { content() }
     }
 }
 
