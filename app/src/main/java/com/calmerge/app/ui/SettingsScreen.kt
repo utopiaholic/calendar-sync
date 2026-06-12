@@ -176,6 +176,14 @@ fun SettingsScreen(viewModel: MainViewModel, onOpenFeeds: () -> Unit = {}) {
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
+        // ---- Local Android calendar POC ----
+        SectionHeader("Local calendars")
+        LocalCalendarProbe()
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
         // ---- Data management (NFR-6) ----
         SectionHeader("Data")
         Text(
