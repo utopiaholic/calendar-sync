@@ -211,15 +211,13 @@ private fun IcsDialog(
         val isDebugHttp = BuildConfig.DEBUG && run {
             // Allow http only for emulator loopback hosts.
             if (!u.startsWith("http://")) return@run false
-            val authority = try {
-                java.net.URI(u).host ?: ""
-            } catch (_: Exception) { "" }
+            val authority = urlHostOrNull(u).orEmpty()
             authority == "localhost" || authority == "10.0.2.2"
         }
         when {
             !isHttps && !isDebugHttp -> "URL must start with https://"
             else -> {
-                val host = try { java.net.URI(u).host } catch (_: Exception) { null }
+                val host = urlHostOrNull(u)
                 if (host.isNullOrEmpty()) "Enter a valid URL with a host" else null
             }
         }

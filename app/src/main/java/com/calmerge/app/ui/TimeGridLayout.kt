@@ -186,10 +186,9 @@ object TimeGridLayout {
         )
 
         val parsed = events.mapNotNull { ev ->
-            val start = ev.startDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@mapNotNull null
+            val start = parseIsoDateOrNull(ev.startDate) ?: return@mapNotNull null
             // iCal all-day endDate is exclusive; missing = start+1 day; inclusive = exclusive - 1.
-            val endExclusive = ev.endDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-                ?: start.plusDays(1)
+            val endExclusive = parseIsoDateOrNull(ev.endDate) ?: start.plusDays(1)
             val endInclusive = endExclusive.minusDays(1)
             if (endInclusive < start) return@mapNotNull null
             AllDayRaw(ev.id, start, endInclusive)

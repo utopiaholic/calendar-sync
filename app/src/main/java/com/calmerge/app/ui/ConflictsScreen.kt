@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.calmerge.app.data.db.AccountStatus
 import com.calmerge.app.data.db.ConflictMemberRow
 import com.calmerge.app.ui.theme.ConflictRed
+import com.calmerge.app.ui.theme.DefaultAccountColor
 import com.calmerge.app.ui.theme.OnSlateSecondary
 import com.calmerge.app.ui.theme.SlateDark3
 import com.calmerge.app.ui.theme.TealAccent
@@ -51,11 +52,7 @@ fun ConflictsScreen(viewModel: MainViewModel) {
     val zone = ZoneId.systemDefault()
     var selectedEvent by remember { mutableStateOf<EventDetailModel?>(null) }
     val failingAccounts = accounts.filter { it.status != AccountStatus.ACTIVE }
-    val icsHostById = remember(accounts) {
-        accounts.associate { acc ->
-            acc.id to acc.icsUrl?.let { runCatching { java.net.URI(it).host }.getOrNull() }
-        }
-    }
+    val icsHostMap = remember(accounts) { icsHostsByAccountId(accounts) }
 
     selectedEvent?.let { event ->
         EventDetailSheet(event = event, onDismiss = { selectedEvent = null })
@@ -105,24 +102,7 @@ fun ConflictsScreen(viewModel: MainViewModel) {
                 cluster = cluster,
                 zone = zone,
                 onEventClick = { rep, copies ->
-                    selectedEvent = EventDetailModel(
-                        title = rep.event.title,
-                        startUtc = rep.event.startUtc,
-                        endUtc = rep.event.endUtc,
-                        isAllDay = rep.event.isAllDay,
-                        startDate = rep.event.startDate,
-                        location = rep.event.location,
-                        organizer = rep.event.organizer,
-                        showAs = rep.event.showAs.name,
-                        accounts = copies.distinctBy { it.accountId }.map {
-                            EventDetailAccount(
-                                id = it.accountId,
-                                name = it.accountName,
-                                type = it.accountType,
-                                icsHost = icsHostById[it.accountId],
-                            )
-                        },
-                    )
+                    selectedEvent = rep.toDetailModel(copies, icsHostMap)
                 },
             )
         }
@@ -137,7 +117,6 @@ private fun ConflictClusterCard(
     onEventClick: (ConflictMemberRow, List<ConflictMemberRow>) -> Unit,
 ) {
     val timed = cluster.members.mapNotNull { (rep, _) -> rep.event.startUtc?.let { rep } }
-    val hasAllDay = cluster.members.any { (rep, _) -> rep.event.isAllDay }
 
     // Compute overlap/span for the visual bar
     data class BarData(
@@ -169,19 +148,9 @@ private fun ConflictClusterCard(
 
     // Header fallback: if fewer than 2 timed events exist, show all-day header
     val effectiveHeaderText: String = barData?.headerText ?: run {
-        if (hasAllDay) {
-            val rawDate = cluster.members.firstOrNull()?.first?.event?.startDate ?: "?"
-            val formattedDate = runCatching {
-                EventUi.dayHeaderFormat.format(java.time.LocalDate.parse(rawDate))
-            }.getOrElse { rawDate }
-            "$formattedDate · All-day overlap"
-        } else {
-            val rawDate = cluster.members.firstOrNull()?.first?.event?.startDate ?: "?"
-            val formattedDate = runCatching {
-                EventUi.dayHeaderFormat.format(java.time.LocalDate.parse(rawDate))
-            }.getOrElse { rawDate }
-            "$formattedDate · All-day overlap"
-        }
+        val rawDate = cluster.members.firstOrNull()?.first?.event?.startDate ?: "?"
+        val formattedDate = parseIsoDateOrNull(rawDate)?.let(EventUi.dayHeaderFormat::format) ?: rawDate
+        "$formattedDate · All-day overlap"
     }
 
     Column(
@@ -254,7 +223,7 @@ private fun OverlapBar(
                 val evtEnd = rep.event.endUtc ?: rep.event.startUtc
                 ((evtEnd - clusterStartMs).toFloat() / totalSpan).coerceIn(0f, 1f)
             }
-            val color = Color(copies.firstOrNull()?.accountColor ?: 0xFF39D0C8.toInt())
+            val color = Color(copies.firstOrNull()?.accountColor ?: DefaultAccountColor)
 
             Box(
                 modifier = Modifier

@@ -3,7 +3,6 @@ package com.calmerge.app.sync
 import android.util.Log
 import androidx.room.withTransaction
 import com.calmerge.app.data.db.AccountStatus
-import com.calmerge.app.data.db.AccountType
 import com.calmerge.app.data.db.AppDatabase
 import com.calmerge.app.data.db.ConflictClusterEntity
 import com.calmerge.app.data.db.ConflictMemberEntity
@@ -30,11 +29,7 @@ class SyncCoordinator(
         val window = SyncWindow.around(now)
         for (account in db.accountDao().getAll()) {
             try {
-                when (account.type) {
-                    AccountType.ICS -> icsEngine.sync(account, window)
-                    AccountType.MS, AccountType.GOOGLE ->
-                        error("OAuth account types are not supported in the ICS-only build")
-                }
+                icsEngine.sync(account, window)
                 db.accountDao().markSyncSuccess(account.id, now.toEpochMilli())
             } catch (e: Exception) {
                 db.accountDao().markSyncFailure(account.id, e.message ?: e.javaClass.simpleName, AccountStatus.ERROR)

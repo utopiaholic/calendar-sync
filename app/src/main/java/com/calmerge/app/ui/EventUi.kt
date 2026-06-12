@@ -1,6 +1,7 @@
 package com.calmerge.app.ui
 
 import com.calmerge.app.data.db.MergedEvent
+import com.calmerge.app.data.db.EventInstanceEntity
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -14,15 +15,24 @@ object EventUi {
     val dayHeaderFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())
     val timeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())
 
-    /** Timed events by UTC start; all-day events pinned to local midnight of their date. */
-    fun sortKeyMs(event: MergedEvent, zone: ZoneId): Long =
-        event.event.startUtc
-            ?: event.event.startDate?.let { runCatching { LocalDate.parse(it).atStartOfDay(zone).toInstant().toEpochMilli() }.getOrNull() }
+    /**
+     * Timed events by UTC start; all-day events pinned to local midnight of their date.
+     * Long.MAX_VALUE keeps unparseable dates sorted last instead of crashing display code.
+     */
+    fun sortKeyMs(event: EventInstanceEntity, zone: ZoneId): Long =
+        event.startUtc
+            ?: isoDateToEpochMillisOrNull(event.startDate, zone)
             ?: Long.MAX_VALUE
 
-    /** Local date an event appears under in the agenda. */
+    fun sortKeyMs(event: MergedEvent, zone: ZoneId): Long =
+        sortKeyMs(event.event, zone)
+
+    /**
+     * Local date an event appears under in the agenda.
+     * LocalDate.MAX gives malformed rows a far-future header instead of crashing display code.
+     */
     fun agendaDate(event: MergedEvent, zone: ZoneId): LocalDate =
-        event.event.startDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        parseIsoDateOrNull(event.event.startDate)
             ?: event.event.startUtc?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
             ?: LocalDate.MAX
 
@@ -42,12 +52,9 @@ object EventUi {
      */
     fun overlapsWeek(event: MergedEvent, weekStart: Long, weekEnd: Long, zone: ZoneId): Boolean {
         return if (event.event.isAllDay) {
-            val startMs = event.event.startDate?.let {
-                runCatching { LocalDate.parse(it).atStartOfDay(zone).toInstant().toEpochMilli() }.getOrNull()
-            } ?: return false
-            val endMs = event.event.endDate?.let {
-                runCatching { LocalDate.parse(it).atStartOfDay(zone).toInstant().toEpochMilli() }.getOrNull()
-            } ?: (startMs + 86_400_000L) // endDate is exclusive; default one day
+            val startMs = isoDateToEpochMillisOrNull(event.event.startDate, zone) ?: return false
+            val endMs = isoDateToEpochMillisOrNull(event.event.endDate, zone)
+                ?: (startMs + 86_400_000L) // endDate is exclusive; default one day
             startMs < weekEnd && endMs > weekStart
         } else {
             val startMs = event.event.startUtc ?: return false

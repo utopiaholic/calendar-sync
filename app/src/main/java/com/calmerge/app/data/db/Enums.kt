@@ -1,6 +1,7 @@
 package com.calmerge.app.data.db
 
-enum class AccountType { MS, GOOGLE, ICS }
+/** ICS-only build: OAuth providers were removed after tenant consent was blocked. */
+enum class AccountType { ICS }
 
 enum class AccountStatus {
     ACTIVE,

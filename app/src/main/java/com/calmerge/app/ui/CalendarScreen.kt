@@ -54,7 +54,6 @@ private val HOUR_HEIGHT: Dp = 56.dp
 private val GUTTER_WIDTH: Dp = 40.dp
 private val TOTAL_HEIGHT: Dp = HOUR_HEIGHT * 24
 private const val MAX_WEEK_OVERLAP_COLUMNS = 2
-private val hourFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 enum class CalendarMode { DAY, WEEK }
 
@@ -73,15 +72,7 @@ fun CalendarScreen(
     val accounts by viewModel.accounts.collectAsState()
     val zone = ZoneId.systemDefault()
 
-    val icsHostById by remember(accounts) {
-        derivedStateOf {
-            accounts.associate { acc ->
-                acc.id to acc.icsUrl?.let {
-                    runCatching { java.net.URI(it).host }.getOrNull()
-                }
-            }
-        }
-    }
+    val icsHostMap = remember(accounts) { icsHostsByAccountId(accounts) }
 
     var mode by remember { mutableStateOf(CalendarMode.WEEK) }
     var anchorDate by remember { mutableStateOf(LocalDate.now(zone)) }
@@ -156,7 +147,7 @@ fun CalendarScreen(
                 eventById = eventById,
                 copiesById = copiesById,
                 conflictedIds = conflictedIds,
-                onEventClick = { event, copies -> selectedEvent = event.toDetailModel(copies, icsHostById) },
+                onEventClick = { event, copies -> selectedEvent = event.toDetailModel(copies, icsHostMap) },
             )
             HorizontalDivider()
         }
@@ -187,7 +178,7 @@ fun CalendarScreen(
                     conflictedIds = conflictedIds,
                     isToday = date == LocalDate.now(zone),
                     maxVisibleColumns = if (mode == CalendarMode.WEEK) MAX_WEEK_OVERLAP_COLUMNS else Int.MAX_VALUE,
-                    onEventClick = { event, copies -> selectedEvent = event.toDetailModel(copies, icsHostById) },
+                    onEventClick = { event, copies -> selectedEvent = event.toDetailModel(copies, icsHostMap) },
                     onOverlapMoreClick = onOpenConflicts,
                     modifier = Modifier.weight(1f),
                 )
@@ -553,26 +544,4 @@ private fun MergedEvent.toInputEvent() = TimeGridLayout.InputEvent(
     isAllDay = event.isAllDay,
     startDate = event.startDate,
     endDate = event.endDate,
-)
-
-private fun MergedEvent.toDetailModel(
-    copies: List<MergedEvent>,
-    icsHostById: Map<String, String?> = emptyMap(),
-) = EventDetailModel(
-    title = event.title,
-    startUtc = event.startUtc,
-    endUtc = event.endUtc,
-    isAllDay = event.isAllDay,
-    startDate = event.startDate,
-    location = event.location,
-    organizer = event.organizer,
-    showAs = event.showAs.name,
-    accounts = copies.distinctBy { it.accountId }.map {
-        EventDetailAccount(
-            id = it.accountId,
-            name = it.accountName,
-            type = it.accountType,
-            icsHost = icsHostById[it.accountId],
-        )
-    },
 )

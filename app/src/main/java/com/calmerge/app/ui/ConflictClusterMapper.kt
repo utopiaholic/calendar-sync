@@ -1,7 +1,6 @@
 package com.calmerge.app.ui
 
 import com.calmerge.app.data.db.ConflictMemberRow
-import java.time.LocalDate
 import java.time.ZoneId
 
 /**
@@ -29,22 +28,12 @@ object ConflictClusterMapper {
             }
             // Sort members by earliest start so display order is deterministic.
             val sortedCollapsed = collapsed.sortedBy { (rep, _) ->
-                rep.event.startUtc
-                    ?: rep.event.startDate?.let { d ->
-                        runCatching { LocalDate.parse(d).atStartOfDay(zone).toInstant().toEpochMilli() }.getOrNull()
-                    }
-                    ?: Long.MAX_VALUE
+                EventUi.sortKeyMs(rep.event, zone)
             }
             ConflictClusterUi(
                 clusterId = clusterId,
                 members = sortedCollapsed,
-                sortKeyMs = members.minOf { m ->
-                    m.event.startUtc
-                        ?: m.event.startDate?.let { d ->
-                            runCatching { LocalDate.parse(d).atStartOfDay(zone).toInstant().toEpochMilli() }.getOrNull()
-                        }
-                        ?: Long.MAX_VALUE
-                },
+                sortKeyMs = members.minOf { m -> EventUi.sortKeyMs(m.event, zone) },
             )
         }.sortedBy { it.sortKeyMs }
     }

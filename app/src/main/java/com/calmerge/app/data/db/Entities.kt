@@ -11,6 +11,7 @@ data class AccountEntity(
     @PrimaryKey val id: String,
     val type: AccountType,
     val displayName: String,
+    /** Reserved for future authenticated providers; unused by the current ICS-only build. */
     val email: String?,
     /** ARGB color for UI badges (FR-19); user-pickable later. */
     val color: Int,

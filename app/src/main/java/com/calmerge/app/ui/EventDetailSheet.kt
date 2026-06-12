@@ -1,6 +1,7 @@
 package com.calmerge.app.ui
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -19,31 +20,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.calmerge.app.data.db.AccountType
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-
-data class EventDetailModel(
-    val title: String,
-    val startUtc: Long?,
-    val endUtc: Long?,
-    val isAllDay: Boolean,
-    val startDate: String?,
-    val location: String?,
-    val organizer: String?,
-    val showAs: String,
-    val accounts: List<EventDetailAccount>,
-)
-
-data class EventDetailAccount(
-    val id: String,
-    val name: String,
-    val type: AccountType,
-    /** Host of the ICS URL, used for deep-link heuristics (FR-22). Null for non-ICS accounts. */
-    val icsHost: String? = null,
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,9 +34,9 @@ fun EventDetailSheet(
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
 
-    val timeMs = event.startUtc ?: event.startDate?.let {
-        runCatching { LocalDate.parse(it).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrNull()
-    } ?: System.currentTimeMillis()
+    val timeMs = event.startUtc
+        ?: isoDateToEpochMillisOrNull(event.startDate, zone)
+        ?: System.currentTimeMillis()
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -101,28 +81,26 @@ fun EventDetailSheet(
 private fun resolveDeepLinkLabel(accounts: List<EventDetailAccount>): String {
     val hosts = accounts.mapNotNull { it.icsHost }
     return when {
-        hosts.any { it.contains("outlook", ignoreCase = true) || it.contains("office365", ignoreCase = true) || it.contains("microsoft", ignoreCase = true) } ->
-            "Open in Outlook"
-        hosts.any { it.contains("google", ignoreCase = true) || it.contains("googleapis", ignoreCase = true) } ->
-            "Open in Google Calendar"
+        CalendarProvider.MICROSOFT.matchesAny(hosts) -> "Open in Outlook"
+        CalendarProvider.GOOGLE.matchesAny(hosts) -> "Open in Google Calendar"
         else -> "Open in calendar app"
     }
 }
 
 private fun openInCalendarApp(
-    context: android.content.Context,
+    context: Context,
     event: EventDetailModel,
     timeMs: Long,
 ) {
     val hosts = event.accounts.mapNotNull { it.icsHost }
 
     // Try Outlook if host suggests Microsoft.
-    if (hosts.any { it.contains("outlook", ignoreCase = true) || it.contains("office365", ignoreCase = true) || it.contains("microsoft", ignoreCase = true) }) {
+    if (CalendarProvider.MICROSOFT.matchesAny(hosts)) {
         if (tryStart(context, outlookIntent(timeMs))) return
     }
 
     // Try Google Calendar if host suggests Google.
-    if (hosts.any { it.contains("google", ignoreCase = true) || it.contains("googleapis", ignoreCase = true) }) {
+    if (CalendarProvider.GOOGLE.matchesAny(hosts)) {
         if (tryStart(context, googleCalendarIntent(timeMs))) return
     }
 
@@ -130,8 +108,8 @@ private fun openInCalendarApp(
     if (tryStart(context, Intent(Intent.ACTION_VIEW, Uri.parse("content://com.android.calendar/time/$timeMs")))) return
 
     // Nothing handled it — web fallback to Google Calendar day view for the event's date.
-    val localDate = java.time.Instant.ofEpochMilli(timeMs)
-        .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+    val localDate = Instant.ofEpochMilli(timeMs)
+        .atZone(ZoneId.systemDefault()).toLocalDate()
     val webUri = "https://calendar.google.com/calendar/r/day/${localDate.year}/${localDate.monthValue}/${localDate.dayOfMonth}"
     val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(webUri))
     if (tryStart(context, webIntent)) return
@@ -141,9 +119,9 @@ private fun openInCalendarApp(
 
 private fun outlookIntent(timeMs: Long): Intent {
     // ms-outlook://events/view?start=<ISO-8601> is the documented Outlook mobile URI.
-    val iso = java.time.Instant.ofEpochMilli(timeMs)
-        .atZone(java.time.ZoneOffset.UTC)
-        .format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+    val iso = Instant.ofEpochMilli(timeMs)
+        .atZone(ZoneOffset.UTC)
+        .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
     return Intent(Intent.ACTION_VIEW, Uri.parse("ms-outlook://events/view?start=${Uri.encode(iso)}"))
         .setPackage("com.microsoft.office.outlook")
 }
@@ -152,7 +130,7 @@ private fun googleCalendarIntent(timeMs: Long): Intent =
     Intent(Intent.ACTION_VIEW, Uri.parse("content://com.android.calendar/time/$timeMs"))
         .setPackage("com.google.android.calendar")
 
-private fun tryStart(context: android.content.Context, intent: Intent): Boolean {
+private fun tryStart(context: Context, intent: Intent): Boolean {
     return try {
         context.startActivity(intent)
         true
@@ -163,7 +141,7 @@ private fun tryStart(context: android.content.Context, intent: Intent): Boolean 
 
 private fun detailTimeText(event: EventDetailModel, zone: ZoneId): String {
     if (event.isAllDay) {
-        val date = event.startDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val date = parseIsoDateOrNull(event.startDate)
         return if (date != null) {
             "All day · ${date.format(DateTimeFormatter.ofPattern("EEE, MMM d"))}"
         } else {

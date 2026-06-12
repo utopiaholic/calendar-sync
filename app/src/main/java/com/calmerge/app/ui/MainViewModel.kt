@@ -1,5 +1,6 @@
 package com.calmerge.app.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -9,7 +10,6 @@ import com.calmerge.app.data.db.AccountType
 import com.calmerge.app.data.db.CalendarSourceEntity
 import com.calmerge.app.data.db.ConflictMemberRow
 import com.calmerge.app.data.db.MergedEvent
-import com.calmerge.app.settings.SettingsStore
 import com.calmerge.app.work.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,10 +17,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.ZoneId
 import java.util.UUID
 
 enum class AgendaFilter { WEEK, ALL }
+
+private const val TAG = "MainViewModel"
 
 /** One conflict cluster prepared for display, soonest first (FR-21). */
 data class ConflictClusterUi(
@@ -83,8 +84,10 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
 
     fun addIcsAccount(name: String, url: String) {
         viewModelScope.launch {
-            val normalized = normalizeUrl(url)
-            val duplicate = accounts.value.any { normalizeUrl(it.icsUrl ?: "") == normalized }
+            val normalized = normalizeUrlOrNull(url)
+            val duplicate = normalized != null && accounts.value.any {
+                normalizeUrlOrNull(it.icsUrl ?: "") == normalized
+            }
             if (duplicate) {
                 addFeedError.value = "This feed is already added"
                 return@launch
@@ -128,11 +131,7 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
     fun setSourceIncluded(sourceId: String, included: Boolean) {
         viewModelScope.launch {
             app.db.calendarSourceDao().setIncluded(sourceId, included)
-            try {
-                app.syncCoordinator.recomputeDerivedState()
-            } catch (e: Exception) {
-                android.util.Log.e("MainViewModel", "recomputeDerivedState failed after setSourceIncluded", e)
-            }
+            recomputeDerived("setSourceIncluded")
         }
     }
 
@@ -155,23 +154,17 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
 
     fun setIncludeTentative(v: Boolean) {
         app.settings.setIncludeTentative(v)
-        viewModelScope.launch {
-            try { app.syncCoordinator.recomputeDerivedState() } catch (_: Exception) {}
-        }
+        viewModelScope.launch { recomputeDerived("setIncludeTentative") }
     }
 
     fun setIncludeOof(v: Boolean) {
         app.settings.setIncludeOof(v)
-        viewModelScope.launch {
-            try { app.syncCoordinator.recomputeDerivedState() } catch (_: Exception) {}
-        }
+        viewModelScope.launch { recomputeDerived("setIncludeOof") }
     }
 
     fun setAllDayConflictsWithTimed(v: Boolean) {
         app.settings.setAllDayConflictsWithTimed(v)
-        viewModelScope.launch {
-            try { app.syncCoordinator.recomputeDerivedState() } catch (_: Exception) {}
-        }
+        viewModelScope.launch { recomputeDerived("setAllDayConflictsWithTimed") }
     }
 
     /** NFR-6: wipe all accounts and events (cascade). */
@@ -182,7 +175,7 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
             app.db.accountDao().getAll().forEach { account ->
                 app.db.accountDao().delete(account.id)
             }
-            try { app.syncCoordinator.recomputeDerivedState() } catch (_: Exception) {}
+            recomputeDerived("wipeAllData")
         }
     }
 
@@ -198,11 +191,7 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
     fun removeAccount(account: AccountEntity) {
         viewModelScope.launch {
             app.db.accountDao().delete(account.id)
-            try {
-                app.syncCoordinator.recomputeDerivedState()
-            } catch (e: Exception) {
-                android.util.Log.e("MainViewModel", "recomputeDerivedState failed after removeAccount", e)
-            }
+            recomputeDerived("removeAccount")
         }
     }
 
@@ -216,31 +205,18 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
         return palette.minByOrNull { usageCounts[it] ?: 0 } ?: palette[0]
     }
 
+    private suspend fun recomputeDerived(reason: String) {
+        try {
+            app.syncCoordinator.recomputeDerivedState()
+        } catch (e: Exception) {
+            Log.e(TAG, "recomputeDerivedState failed after $reason", e)
+        }
+    }
+
     companion object {
         fun factory(app: CalMergeApp) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T = MainViewModel(app) as T
         }
-    }
-}
-
-/**
- * Normalizes a URL for duplicate detection: trims whitespace, lowercases
- * scheme+host, strips a single trailing slash. Pure function — no Android
- * framework classes — so it is unit-testable on the JVM.
- */
-fun normalizeUrl(raw: String): String {
-    val trimmed = raw.trim()
-    if (trimmed.isEmpty()) return ""
-    return try {
-        val uri = java.net.URI(trimmed)
-        val scheme = (uri.scheme ?: "").lowercase()
-        val authority = (uri.authority ?: "").lowercase()
-        val path = uri.path ?: ""
-        val normalizedPath = if (path.endsWith("/") && path.length > 1) path.dropLast(1) else path
-        val query = uri.rawQuery?.let { "?$it" } ?: ""
-        "$scheme://$authority$normalizedPath$query"
-    } catch (_: Exception) {
-        trimmed.lowercase()
     }
 }

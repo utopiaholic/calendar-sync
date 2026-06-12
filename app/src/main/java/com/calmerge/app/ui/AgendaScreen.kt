@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.calmerge.app.data.db.MergedEvent
 import com.calmerge.app.ui.theme.OnSlateSecondary
 import com.calmerge.app.ui.theme.SlateDark3
+import com.calmerge.app.ui.theme.DefaultAccountColor
 import com.calmerge.app.ui.theme.glassSurface
 import java.time.ZoneId
 
@@ -60,11 +61,7 @@ fun AgendaScreen(viewModel: MainViewModel) {
     val zone = ZoneId.systemDefault()
     var selectedEvent by remember { mutableStateOf<EventDetailModel?>(null) }
 
-    val icsHostById = remember(accounts) {
-        accounts.associate { acc ->
-            acc.id to acc.icsUrl?.let { runCatching { java.net.URI(it).host }.getOrNull() }
-        }
-    }
+    val icsHostMap = remember(accounts) { icsHostsByAccountId(accounts) }
 
     val filtered = remember(events, filter) {
         val collapsed = EventUi.collapseDuplicates(events)
@@ -154,24 +151,7 @@ fun AgendaScreen(viewModel: MainViewModel) {
                         inConflict = copies.any { it.event.id in conflictedIds },
                         zone = zone,
                         onClick = {
-                            selectedEvent = EventDetailModel(
-                                title = rep.event.title,
-                                startUtc = rep.event.startUtc,
-                                endUtc = rep.event.endUtc,
-                                isAllDay = rep.event.isAllDay,
-                                startDate = rep.event.startDate,
-                                location = rep.event.location,
-                                organizer = rep.event.organizer,
-                                showAs = rep.event.showAs.name,
-                                accounts = copies.distinctBy { it.accountId }.map {
-                                    EventDetailAccount(
-                                        id = it.accountId,
-                                        name = it.accountName,
-                                        type = it.accountType,
-                                        icsHost = icsHostById[it.accountId],
-                                    )
-                                },
-                            )
+                            selectedEvent = rep.toDetailModel(copies, icsHostMap)
                         },
                     )
                 }
@@ -189,7 +169,7 @@ private fun EventCard(
     onClick: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
-    val primaryColor = Color(copies.firstOrNull()?.accountColor ?: 0xFF39D0C8.toInt())
+    val primaryColor = Color(copies.firstOrNull()?.accountColor ?: DefaultAccountColor)
 
     Row(
         modifier = Modifier

@@ -1,6 +1,7 @@
 package com.calmerge.app.work
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -10,6 +11,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.calmerge.app.CalMergeApp
 import java.util.concurrent.TimeUnit
+
+private const val TAG = "SyncWorker"
 
 /**
  * FR-9: periodic background sync, 30-minute default. Timing is best-effort —
@@ -25,6 +28,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
             app.syncCoordinator.syncAll()
             Result.success()
         } catch (e: Exception) {
+            Log.e(TAG, "Periodic sync failed", e)
             Result.retry()
         }
     }

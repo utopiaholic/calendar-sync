@@ -11,6 +11,7 @@ val SlateSurfaceVariant = Color(0xFF2D333B)
 
 // Accent — teal
 val TealAccent = Color(0xFF39D0C8)
+internal val DefaultAccountColor = 0xFF39D0C8.toInt()
 val TealContainer = Color(0xFF003A38)
 
 // Accent — soft purple
