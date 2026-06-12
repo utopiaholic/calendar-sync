@@ -21,13 +21,27 @@ import java.time.ZoneId
  *   never conflict with each other; the group participates as one logical event.
  * - Transitive overlaps merge: A↔B and B↔C → one cluster {A,B,C} (FR-18).
  */
+data class ConflictConfig(
+    val includeTentative: Boolean = true,
+    val includeOof: Boolean = true,
+    /** FR-15 default: all-day events do NOT conflict with timed events. */
+    val allDayConflictsWithTimed: Boolean = false,
+)
+
 object ConflictDetector {
 
-    private val CONFLICTING = setOf(ShowAs.BUSY, ShowAs.TENTATIVE, ShowAs.OOF)
-
     /** Each returned cluster is the list of EventInstance ids involved (incl. all dedupe copies). */
-    fun detect(events: List<EventInstanceEntity>, zone: ZoneId): List<List<String>> {
-        val eligible = events.filter { it.showAs in CONFLICTING && it.responseStatus != ResponseStatus.DECLINED }
+    fun detect(
+        events: List<EventInstanceEntity>,
+        zone: ZoneId,
+        config: ConflictConfig = ConflictConfig(),
+    ): List<List<String>> {
+        val conflicting = buildSet {
+            add(ShowAs.BUSY)
+            if (config.includeTentative) add(ShowAs.TENTATIVE)
+            if (config.includeOof) add(ShowAs.OOF)
+        }
+        val eligible = events.filter { it.showAs in conflicting && it.responseStatus != ResponseStatus.DECLINED }
 
         // Collapse dedupe groups into logical events.
         val logical = eligible
@@ -35,8 +49,12 @@ object ConflictDetector {
             .values
             .mapNotNull { members -> toInterval(members, zone) }
 
-        val (allDay, timed) = logical.partition { it.isAllDay }
-        return clusterBySweep(timed) + clusterBySweep(allDay)
+        return if (config.allDayConflictsWithTimed) {
+            clusterBySweep(logical)
+        } else {
+            val (allDay, timed) = logical.partition { it.isAllDay }
+            clusterBySweep(timed) + clusterBySweep(allDay)
+        }
     }
 
     private data class Interval(

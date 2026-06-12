@@ -32,6 +32,9 @@ interface AccountDao {
     @Query("UPDATE accounts SET lastSyncError = :error, status = :status WHERE id = :id")
     suspend fun markSyncFailure(id: String, error: String?, status: AccountStatus)
 
+    @Query("UPDATE accounts SET color = :color WHERE id = :id")
+    suspend fun updateColor(id: String, color: Int)
+
     /** NFR-6: cascades delete all calendar sources and cached events. */
     @Query("DELETE FROM accounts WHERE id = :id")
     suspend fun delete(id: String)

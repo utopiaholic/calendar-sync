@@ -3,6 +3,7 @@ package dev.albert.calmerge.ui
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,6 +41,8 @@ data class EventDetailAccount(
     val id: String,
     val name: String,
     val type: AccountType,
+    /** Host of the ICS URL, used for deep-link heuristics (FR-22). Null for non-ICS accounts. */
+    val icsHost: String? = null,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,25 +81,83 @@ fun EventDetailSheet(
                 Text("Organizer: ${event.organizer}", style = MaterialTheme.typography.bodyMedium)
             }
 
+            // FR-22: deep-link to the native calendar app for this event.
+            val deepLinkLabel = resolveDeepLinkLabel(event.accounts)
             Button(
-                onClick = {
-                    try {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse("content://com.android.calendar/time/$timeMs")),
-                        )
-                    } catch (_: ActivityNotFoundException) {
-                        // No calendar app installed — silently ignore.
-                    }
-                },
+                onClick = { openInCalendarApp(context, event, timeMs) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Open in calendar app")
+                Text(deepLinkLabel)
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
         }
+    }
+}
+
+/** Returns a label for the deep-link button based on which calendar app is likely available. */
+private fun resolveDeepLinkLabel(accounts: List<EventDetailAccount>): String {
+    val hosts = accounts.mapNotNull { it.icsHost }
+    return when {
+        hosts.any { it.contains("outlook", ignoreCase = true) || it.contains("office365", ignoreCase = true) || it.contains("microsoft", ignoreCase = true) } ->
+            "Open in Outlook"
+        hosts.any { it.contains("google", ignoreCase = true) || it.contains("googleapis", ignoreCase = true) } ->
+            "Open in Google Calendar"
+        else -> "Open in calendar app"
+    }
+}
+
+private fun openInCalendarApp(
+    context: android.content.Context,
+    event: EventDetailModel,
+    timeMs: Long,
+) {
+    val hosts = event.accounts.mapNotNull { it.icsHost }
+
+    // Try Outlook if host suggests Microsoft.
+    if (hosts.any { it.contains("outlook", ignoreCase = true) || it.contains("office365", ignoreCase = true) || it.contains("microsoft", ignoreCase = true) }) {
+        if (tryStart(context, outlookIntent(timeMs))) return
+    }
+
+    // Try Google Calendar if host suggests Google.
+    if (hosts.any { it.contains("google", ignoreCase = true) || it.contains("googleapis", ignoreCase = true) }) {
+        if (tryStart(context, googleCalendarIntent(timeMs))) return
+    }
+
+    // Generic AOSP calendar content URI.
+    if (tryStart(context, Intent(Intent.ACTION_VIEW, Uri.parse("content://com.android.calendar/time/$timeMs")))) return
+
+    // Nothing handled it — web fallback to Google Calendar day view for the event's date.
+    val localDate = java.time.Instant.ofEpochMilli(timeMs)
+        .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+    val webUri = "https://calendar.google.com/calendar/r/day/${localDate.year}/${localDate.monthValue}/${localDate.dayOfMonth}"
+    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(webUri))
+    if (tryStart(context, webIntent)) return
+
+    Toast.makeText(context, "No calendar app found", Toast.LENGTH_SHORT).show()
+}
+
+private fun outlookIntent(timeMs: Long): Intent {
+    // ms-outlook://events/view?start=<ISO-8601> is the documented Outlook mobile URI.
+    val iso = java.time.Instant.ofEpochMilli(timeMs)
+        .atZone(java.time.ZoneOffset.UTC)
+        .format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+    return Intent(Intent.ACTION_VIEW, Uri.parse("ms-outlook://events/view?start=${Uri.encode(iso)}"))
+        .setPackage("com.microsoft.office.outlook")
+}
+
+private fun googleCalendarIntent(timeMs: Long): Intent =
+    Intent(Intent.ACTION_VIEW, Uri.parse("content://com.android.calendar/time/$timeMs"))
+        .setPackage("com.google.android.calendar")
+
+private fun tryStart(context: android.content.Context, intent: Intent): Boolean {
+    return try {
+        context.startActivity(intent)
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
     }
 }
 

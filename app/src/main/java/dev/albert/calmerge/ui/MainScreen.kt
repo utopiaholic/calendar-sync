@@ -25,9 +25,10 @@ fun MainScreen(viewModel: MainViewModel) {
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         TabRow(selectedTabIndex = selectedTab) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Agenda") })
+            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Calendar") })
             Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
+                selected = selectedTab == 2,
+                onClick = { selectedTab = 2 },
                 text = {
                     if (clusters.isEmpty()) {
                         Text("Conflicts")
@@ -36,12 +37,15 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 },
             )
-            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Feeds") })
+            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Feeds") })
+            Tab(selected = selectedTab == 4, onClick = { selectedTab = 4 }, text = { Text("Settings") })
         }
         when (selectedTab) {
             0 -> AgendaScreen(viewModel)
-            1 -> ConflictsScreen(viewModel)
-            else -> FeedsScreen(viewModel)
+            1 -> CalendarScreen(viewModel)
+            2 -> ConflictsScreen(viewModel)
+            3 -> FeedsScreen(viewModel)
+            else -> SettingsScreen(viewModel)
         }
     }
 }

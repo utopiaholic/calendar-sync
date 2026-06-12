@@ -43,6 +43,11 @@ fun ConflictsScreen(viewModel: MainViewModel) {
     val zone = ZoneId.systemDefault()
     var selectedEvent by remember { mutableStateOf<EventDetailModel?>(null) }
     val failingAccounts = accounts.filter { it.status != AccountStatus.ACTIVE }
+    val icsHostById = remember(accounts) {
+        accounts.associate { acc ->
+            acc.id to acc.icsUrl?.let { runCatching { java.net.URI(it).host }.getOrNull() }
+        }
+    }
 
     selectedEvent?.let { event ->
         EventDetailSheet(event = event, onDismiss = { selectedEvent = null })
@@ -99,6 +104,7 @@ fun ConflictsScreen(viewModel: MainViewModel) {
                                 id = it.accountId,
                                 name = it.accountName,
                                 type = it.accountType,
+                                icsHost = icsHostById[it.accountId],
                             )
                         },
                     )

@@ -7,6 +7,7 @@ import dev.albert.calmerge.data.db.AccountType
 import dev.albert.calmerge.data.db.AppDatabase
 import dev.albert.calmerge.data.db.ConflictClusterEntity
 import dev.albert.calmerge.data.db.ConflictMemberEntity
+import dev.albert.calmerge.settings.SettingsStore
 import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
@@ -22,6 +23,7 @@ import java.util.UUID
 class SyncCoordinator(
     private val db: AppDatabase,
     private val icsEngine: IcsSyncEngine,
+    private val settings: SettingsStore? = null,
 ) {
 
     suspend fun syncAll(now: Instant = Instant.now()) {
@@ -72,7 +74,14 @@ class SyncCoordinator(
     private suspend fun recomputeConflicts(now: Instant) {
         // FR-5: only included events feed into conflict detection.
         val events = db.eventInstanceDao().getAllIncluded()
-        val clusters = ConflictDetector.detect(events, ZoneId.systemDefault())
+        val config = settings?.let {
+            ConflictConfig(
+                includeTentative = it.includeTentative.value,
+                includeOof = it.includeOof.value,
+                allDayConflictsWithTimed = it.allDayConflictsWithTimed.value,
+            )
+        } ?: ConflictConfig()
+        val clusters = ConflictDetector.detect(events, ZoneId.systemDefault(), config)
         val clusterEntities = mutableListOf<ConflictClusterEntity>()
         val memberEntities = mutableListOf<ConflictMemberEntity>()
         for (memberIds in clusters) {

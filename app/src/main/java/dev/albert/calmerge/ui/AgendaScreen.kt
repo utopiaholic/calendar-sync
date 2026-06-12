@@ -42,8 +42,15 @@ fun AgendaScreen(viewModel: MainViewModel) {
     val events by viewModel.mergedEvents.collectAsState()
     val conflictedIds by viewModel.conflictedEventIds.collectAsState()
     val filter by viewModel.agendaFilter.collectAsState()
+    val accounts by viewModel.accounts.collectAsState()
     val zone = ZoneId.systemDefault()
     var selectedEvent by remember { mutableStateOf<EventDetailModel?>(null) }
+
+    val icsHostById = remember(accounts) {
+        accounts.associate { acc ->
+            acc.id to acc.icsUrl?.let { runCatching { java.net.URI(it).host }.getOrNull() }
+        }
+    }
 
     val collapsed = EventUi.collapseDuplicates(events)
     val filtered = when (filter) {
@@ -122,6 +129,7 @@ fun AgendaScreen(viewModel: MainViewModel) {
                                         id = it.accountId,
                                         name = it.accountName,
                                         type = it.accountType,
+                                        icsHost = icsHostById[it.accountId],
                                     )
                                 },
                             )

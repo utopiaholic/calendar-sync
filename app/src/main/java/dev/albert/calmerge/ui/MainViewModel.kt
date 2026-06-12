@@ -9,6 +9,8 @@ import dev.albert.calmerge.data.db.AccountType
 import dev.albert.calmerge.data.db.CalendarSourceEntity
 import dev.albert.calmerge.data.db.ConflictMemberRow
 import dev.albert.calmerge.data.db.MergedEvent
+import dev.albert.calmerge.settings.SettingsStore
+import dev.albert.calmerge.work.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +33,7 @@ data class ConflictClusterUi(
 class MainViewModel(private val app: CalMergeApp) : ViewModel() {
 
     /** Distinct badge colors assigned to feeds in connect order; cycles by usage count only when palette exhausted. */
-    private val palette = listOf(
+    val palette = listOf(
         0xFF1A73E8.toInt(), // blue
         0xFFD93025.toInt(), // red
         0xFF188038.toInt(), // green
@@ -131,6 +133,64 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
             } catch (e: Exception) {
                 android.util.Log.e("MainViewModel", "recomputeDerivedState failed after setSourceIncluded", e)
             }
+        }
+    }
+
+    // ---- Settings delegation ----
+
+    val syncIntervalMinutes: StateFlow<Long> = app.settings.syncIntervalMinutes
+    val includeTentative: StateFlow<Boolean> = app.settings.includeTentative
+    val includeOof: StateFlow<Boolean> = app.settings.includeOof
+    val allDayConflictsWithTimed: StateFlow<Boolean> = app.settings.allDayConflictsWithTimed
+
+    fun setSyncInterval(minutes: Long) {
+        app.settings.setSyncInterval(minutes)
+        if (minutes > 0) {
+            SyncScheduler.ensurePeriodicSync(app, minutes)
+        } else {
+            // Cancel periodic work when user selects "Manual only".
+            SyncScheduler.cancelPeriodicSync(app)
+        }
+    }
+
+    fun setIncludeTentative(v: Boolean) {
+        app.settings.setIncludeTentative(v)
+        viewModelScope.launch {
+            try { app.syncCoordinator.recomputeDerivedState() } catch (_: Exception) {}
+        }
+    }
+
+    fun setIncludeOof(v: Boolean) {
+        app.settings.setIncludeOof(v)
+        viewModelScope.launch {
+            try { app.syncCoordinator.recomputeDerivedState() } catch (_: Exception) {}
+        }
+    }
+
+    fun setAllDayConflictsWithTimed(v: Boolean) {
+        app.settings.setAllDayConflictsWithTimed(v)
+        viewModelScope.launch {
+            try { app.syncCoordinator.recomputeDerivedState() } catch (_: Exception) {}
+        }
+    }
+
+    /** NFR-6: wipe all accounts and events (cascade). */
+    fun wipeAllData() {
+        viewModelScope.launch {
+            // Query inside the coroutine — accounts.value can be empty if no collector
+            // has subscribed (e.g. after process-death restore to Settings tab).
+            app.db.accountDao().getAll().forEach { account ->
+                app.db.accountDao().delete(account.id)
+            }
+            try { app.syncCoordinator.recomputeDerivedState() } catch (_: Exception) {}
+        }
+    }
+
+    /** FR-19: user-pickable account color. Targeted update avoids clobbering a
+     *  concurrently-written sync status (lastSyncUtc / lastSyncError). */
+    fun updateAccountColor(accountId: String, color: Int) {
+        viewModelScope.launch {
+            app.db.accountDao().updateColor(accountId, color)
         }
     }
 

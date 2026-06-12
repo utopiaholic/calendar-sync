@@ -1,8 +1,13 @@
 package dev.albert.calmerge.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -31,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.albert.calmerge.BuildConfig
@@ -48,6 +55,7 @@ fun FeedsScreen(viewModel: MainViewModel) {
     val addFeedSuccess by viewModel.addFeedSuccess.collectAsState()
     var showIcsDialog by remember { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<AccountEntity?>(null) }
+    var colorPickerTarget by remember { mutableStateOf<AccountEntity?>(null) }
 
     // Close the dialog when the VM signals a successful insert.
     LaunchedEffect(addFeedSuccess) {
@@ -63,6 +71,18 @@ fun FeedsScreen(viewModel: MainViewModel) {
             delay(60_000)
             value = System.currentTimeMillis()
         }
+    }
+
+    colorPickerTarget?.let { account ->
+        ColorPickerDialog(
+            palette = viewModel.palette,
+            currentColor = account.color,
+            onColorSelected = { color ->
+                viewModel.updateAccountColor(account.id, color)
+                colorPickerTarget = null
+            },
+            onDismiss = { colorPickerTarget = null },
+        )
     }
 
     if (showIcsDialog) {
@@ -105,7 +125,12 @@ fun FeedsScreen(viewModel: MainViewModel) {
         }
 
         items(accounts, key = { it.id }) { account ->
-            AccountRow(account = account, now = now, onRemove = { removeTarget = account })
+            AccountRow(
+                account = account,
+                now = now,
+                onRemove = { removeTarget = account },
+                onColorClick = { colorPickerTarget = account },
+            )
             sources.filter { it.accountId == account.id }.forEach { source ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -123,9 +148,16 @@ fun FeedsScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-private fun AccountRow(account: AccountEntity, now: Long, onRemove: () -> Unit) {
+private fun AccountRow(account: AccountEntity, now: Long, onRemove: () -> Unit, onColorClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Spacer(Modifier.size(10.dp).background(Color(account.color), CircleShape))
+        // FR-19: tapping the color dot opens the palette picker.
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(Color(account.color))
+                .clickable(onClick = onColorClick),
+        )
         Spacer(Modifier.width(6.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(account.displayName, style = MaterialTheme.typography.bodyMedium)
@@ -214,6 +246,43 @@ private fun IcsDialog(
             TextButton(onClick = { onConfirm(name, effectiveUrl) }, enabled = urlOk) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ColorPickerDialog(
+    palette: List<Int>,
+    currentColor: Int,
+    onColorSelected: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Pick a color") },
+        text = {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                palette.forEach { color ->
+                    val selected = color == currentColor
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(color))
+                            .then(
+                                if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                                else Modifier
+                            )
+                            .clickable { onColorSelected(color) },
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 
