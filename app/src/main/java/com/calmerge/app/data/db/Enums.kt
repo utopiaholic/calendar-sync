@@ -1,7 +1,15 @@
 package com.calmerge.app.data.db
 
-/** ICS-only build: OAuth providers were removed after tenant consent was blocked. */
-enum class AccountType { ICS }
+/**
+ * ICS was the only type until the local-calendar import milestone.
+ * Adding a new source: add an enum value here + one CalendarSourceEngine implementation.
+ */
+enum class AccountType {
+    /** ICS subscription feed via OkHttp. */
+    ICS,
+    /** Android CalendarContract — calendars already synced to the device (Outlook, Google, etc.). */
+    LOCAL,
+}
 
 enum class AccountStatus {
     ACTIVE,

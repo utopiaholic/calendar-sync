@@ -1,15 +1,18 @@
 package com.calmerge.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -29,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.calmerge.app.data.db.AccountEntity
 import kotlinx.coroutines.delay
 
-/** Feed management: add/remove ICS feeds, include toggles, per-feed sync status (FR-5, FR-24). */
+/** Calendar management: add from phone or ICS link, include toggles, per-account sync status. */
 @Composable
 fun FeedsScreen(viewModel: MainViewModel) {
     val accounts by viewModel.accounts.collectAsState()
@@ -37,19 +40,21 @@ fun FeedsScreen(viewModel: MainViewModel) {
     val syncing by viewModel.syncing.collectAsState()
     val addFeedError by viewModel.addFeedError.collectAsState()
     val addFeedSuccess by viewModel.addFeedSuccess.collectAsState()
+
+    var showChooser by remember { mutableStateOf(false) }
     var showIcsDialog by remember { mutableStateOf(false) }
+    var showLocalPicker by remember { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<AccountEntity?>(null) }
     var colorPickerTarget by remember { mutableStateOf<AccountEntity?>(null) }
 
-    // Close the dialog when the VM signals a successful insert.
     LaunchedEffect(addFeedSuccess) {
         if (addFeedSuccess) {
             showIcsDialog = false
+            showLocalPicker = false
             viewModel.consumeAddFeedSuccess()
         }
     }
 
-    // Minute ticker so "Last synced" labels refresh without a full recompose trigger.
     val now by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
             delay(60_000)
@@ -69,6 +74,20 @@ fun FeedsScreen(viewModel: MainViewModel) {
         )
     }
 
+    if (showChooser) {
+        AddCalendarChooser(
+            onFromPhone = {
+                showChooser = false
+                showLocalPicker = true
+            },
+            onFromLink = {
+                showChooser = false
+                showIcsDialog = true
+            },
+            onDismiss = { showChooser = false },
+        )
+    }
+
     if (showIcsDialog) {
         AddIcsFeedDialog(
             existingError = addFeedError,
@@ -78,6 +97,14 @@ fun FeedsScreen(viewModel: MainViewModel) {
                 showIcsDialog = false
             },
             onUrlChange = { viewModel.clearAddFeedError() },
+        )
+    }
+
+    if (showLocalPicker) {
+        LocalCalendarPicker(
+            viewModel = viewModel,
+            alreadyImportedSourceIds = sources.map { it.providerCalendarId }.toSet(),
+            onDismiss = { showLocalPicker = false },
         )
     }
 
@@ -101,7 +128,7 @@ fun FeedsScreen(viewModel: MainViewModel) {
     LazyColumn(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-                OutlinedButton(onClick = { showIcsDialog = true }) { Text("+ Add ICS feed") }
+                OutlinedButton(onClick = { showChooser = true }) { Text("+ Add calendar") }
                 Button(onClick = { viewModel.syncNow() }, enabled = !syncing && accounts.isNotEmpty()) {
                     Text(if (syncing) "Syncing…" else "Sync now")
                 }
@@ -115,7 +142,8 @@ fun FeedsScreen(viewModel: MainViewModel) {
                 onRemove = { removeTarget = account },
                 onColorClick = { colorPickerTarget = account },
             )
-            sources.filter { it.accountId == account.id }.forEach { source ->
+            val accountSources = sources.filter { it.accountId == account.id }
+            accountSources.forEach { source ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().padding(start = 24.dp),
@@ -127,6 +155,75 @@ fun FeedsScreen(viewModel: MainViewModel) {
                     )
                 }
             }
+            if (accountSources.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                HorizontalDivider()
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddCalendarChooser(
+    onFromPhone: () -> Unit,
+    onFromLink: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add calendar") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChooserOption(
+                    title = "Use calendars on this phone",
+                    subtitle = "Import calendars already synced to Android.",
+                    onClick = onFromPhone,
+                )
+                HorizontalDivider()
+                ChooserOption(
+                    title = "Paste calendar link",
+                    subtitle = "Use an ICS/iCal subscription URL.",
+                    onClick = onFromLink,
+                )
+                HorizontalDivider()
+                ChooserOption(
+                    title = "Sign in with Microsoft or Google",
+                    subtitle = "Coming later.",
+                    onClick = {},
+                    enabled = false,
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun ChooserOption(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

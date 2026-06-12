@@ -5,6 +5,8 @@ import androidx.work.Configuration
 import com.calmerge.app.data.db.AppDatabase
 import com.calmerge.app.settings.SettingsStore
 import com.calmerge.app.sync.IcsSyncEngine
+import com.calmerge.app.sync.LocalCalendarStore
+import com.calmerge.app.sync.LocalCalendarSyncEngine
 import com.calmerge.app.sync.SyncCoordinator
 import com.calmerge.app.work.SyncScheduler
 import okhttp3.OkHttpClient
@@ -23,8 +25,18 @@ class CalMergeApp : Application(), Configuration.Provider {
             .build()
     }
 
+    val localCalendarStore: LocalCalendarStore by lazy { LocalCalendarStore(this) }
+
     val syncCoordinator: SyncCoordinator by lazy {
-        SyncCoordinator(db = db, icsEngine = IcsSyncEngine(okHttp, db), settings = settings)
+        val engines = listOf(
+            IcsSyncEngine(okHttp),
+            LocalCalendarSyncEngine(this, localCalendarStore),
+        ).associateBy { it.accountType }
+        SyncCoordinator(
+            db = SyncCoordinator.RoomAdapter(db),
+            engines = engines,
+            settings = settings,
+        )
     }
 
     override val workManagerConfiguration: Configuration

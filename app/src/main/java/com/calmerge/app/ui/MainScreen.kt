@@ -61,7 +61,7 @@ private enum class MainTab(val label: String, val icon: ImageVector) {
     CONFLICTS("Conflicts", Icons.Rounded.Warning),
 }
 
-private enum class SubScreen(val title: String) { FEEDS("Feeds"), SETTINGS("Settings") }
+private enum class SubScreen(val title: String) { FEEDS("Calendars"), SETTINGS("Settings") }
 
 @Composable
 fun MainScreen(viewModel: MainViewModel) {

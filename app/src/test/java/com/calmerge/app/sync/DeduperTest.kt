@@ -90,4 +90,18 @@ class DeduperTest {
         )
         assertTrue(groups.isEmpty())
     }
+
+    @Test
+    fun `LOCAL and ICS events with same iCalUId group together`() {
+        // The Outlook-in-both-sources case: the same meeting is visible via a
+        // LOCAL CalendarContract source and an ICS feed simultaneously.
+        val groups = Deduper.computeGroups(
+            listOf(
+                event("local-evt", sourceId = "local:42", iCalUId = "meeting-001@example.com"),
+                event("ics-evt", sourceId = "ics-feed-workA", iCalUId = "meeting-001@example.com"),
+            ),
+        )
+        assertEquals("Expected one dedupe group for LOCAL+ICS with same UID", 1, groups.size)
+        assertEquals(setOf("local-evt", "ics-evt"), groups.single().eventIds.toSet())
+    }
 }

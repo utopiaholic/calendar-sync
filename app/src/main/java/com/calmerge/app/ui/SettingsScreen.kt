@@ -84,14 +84,14 @@ fun SettingsScreen(viewModel: MainViewModel, onOpenFeeds: () -> Unit = {}) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        // ---- Feeds link ----
-        SectionHeader("Feeds")
+        // ---- Calendars link ----
+        SectionHeader("Calendars")
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Manage feeds", style = MaterialTheme.typography.bodyMedium)
+            Text("Manage calendars", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = onOpenFeeds) {
                 Text("Open")
                 Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null)
@@ -176,18 +176,10 @@ fun SettingsScreen(viewModel: MainViewModel, onOpenFeeds: () -> Unit = {}) {
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
-        // ---- Local Android calendar POC ----
-        SectionHeader("Local calendars")
-        LocalCalendarProbe()
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
         // ---- Data management (NFR-6) ----
         SectionHeader("Data")
         Text(
-            "Disconnecting individual feeds removes their events — see Feeds. The button below removes everything.",
+            "Disconnecting individual calendars removes their events — see Calendars. The button below removes everything.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 12.dp),

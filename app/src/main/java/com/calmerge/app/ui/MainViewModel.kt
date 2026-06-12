@@ -10,6 +10,7 @@ import com.calmerge.app.data.db.AccountType
 import com.calmerge.app.data.db.CalendarSourceEntity
 import com.calmerge.app.data.db.ConflictMemberRow
 import com.calmerge.app.data.db.MergedEvent
+import com.calmerge.app.sync.DeviceCalendar
 import com.calmerge.app.work.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -122,16 +123,70 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
                 return@launch
             }
             addFeedError.value = null
+            val accountId = UUID.randomUUID().toString()
+            val displayName = name.ifBlank { "ICS feed" }
             app.db.accountDao().upsert(
                 AccountEntity(
-                    id = UUID.randomUUID().toString(),
+                    id = accountId,
                     type = AccountType.ICS,
-                    displayName = name.ifBlank { "ICS feed" },
+                    displayName = displayName,
                     email = null,
                     color = nextColor(),
                     icsUrl = url.trim(),
                 ),
             )
+            // Create the implicit source row at add time so the engine stays write-free.
+            app.db.calendarSourceDao().insertIgnore(
+                listOf(
+                    CalendarSourceEntity(
+                        id = UUID.randomUUID().toString(),
+                        accountId = accountId,
+                        providerCalendarId = "ics",
+                        name = displayName,
+                    ),
+                ),
+            )
+            addFeedSuccess.value = true
+            syncNow()
+        }
+    }
+
+    /**
+     * Import the given device calendars as LOCAL account sources.
+     * One AccountEntity per distinct (androidAccountType, androidAccountName) pair;
+     * one CalendarSourceEntity per selected calendar. Idempotent: existing rows are
+     * ignored via insertIgnore. Triggers a sync when done.
+     */
+    fun addLocalCalendars(selection: List<DeviceCalendar>) {
+        viewModelScope.launch {
+            // Group by Android account so we create one AccountEntity per account.
+            val byAccount = selection.groupBy { it.accountName to it.accountType }
+            for ((accountKey, calendars) in byAccount) {
+                val (androidAccountName, androidAccountType) = accountKey
+                val accountId = "local:$androidAccountType:$androidAccountName"
+                val existing = accounts.value.find { it.id == accountId }
+                if (existing == null) {
+                    app.db.accountDao().upsert(
+                        AccountEntity(
+                            id = accountId,
+                            type = AccountType.LOCAL,
+                            displayName = androidAccountName,
+                            email = androidAccountName,
+                            color = nextColor(),
+                            icsUrl = null,
+                        ),
+                    )
+                }
+                val sources = calendars.map { cal ->
+                    CalendarSourceEntity(
+                        id = "local:${cal.id}",
+                        accountId = accountId,
+                        providerCalendarId = cal.id.toString(),
+                        name = cal.displayName,
+                    )
+                }
+                app.db.calendarSourceDao().insertIgnore(sources)
+            }
             addFeedSuccess.value = true
             syncNow()
         }

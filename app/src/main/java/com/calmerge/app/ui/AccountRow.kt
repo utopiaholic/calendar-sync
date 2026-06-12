@@ -1,6 +1,7 @@
 package com.calmerge.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.calmerge.app.data.db.AccountEntity
 import com.calmerge.app.data.db.AccountStatus
+import com.calmerge.app.data.db.AccountType
 
 @Composable
 internal fun AccountRow(account: AccountEntity, now: Long, onRemove: () -> Unit, onColorClick: () -> Unit) {
@@ -47,7 +50,11 @@ internal fun AccountRow(account: AccountEntity, now: Long, onRemove: () -> Unit,
         }
         Spacer(Modifier.width(6.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(account.displayName, style = MaterialTheme.typography.bodyMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(account.displayName, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.width(6.dp))
+                SourceTypeChip(account.type)
+            }
             val status = when (account.status) {
                 AccountStatus.ACTIVE -> account.lastSyncUtc?.let { "Last synced: ${relativeMinutes(it, now)}" } ?: "Never synced"
                 AccountStatus.NEEDS_REAUTH -> "Feed auth problem"
@@ -61,6 +68,26 @@ internal fun AccountRow(account: AccountEntity, now: Long, onRemove: () -> Unit,
         }
         TextButton(onClick = onRemove) { Text("Remove") }
     }
+}
+
+@Composable
+private fun SourceTypeChip(type: AccountType) {
+    val label = when (type) {
+        AccountType.LOCAL -> "Phone"
+        AccountType.ICS -> "ICS"
+    }
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(4.dp),
+            )
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+    )
 }
 
 private fun relativeMinutes(epochMs: Long, now: Long = System.currentTimeMillis()): String {

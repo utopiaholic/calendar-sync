@@ -159,15 +159,15 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Feeds card
+            // Calendars card
             BentoCard(
                 modifier = Modifier.weight(1f),
                 onClick = onOpenFeeds,
             ) {
-                Text("Feeds", style = MaterialTheme.typography.titleSmall, color = OnSlateSecondary)
+                Text("Calendars", style = MaterialTheme.typography.titleSmall, color = OnSlateSecondary)
                 Spacer(Modifier.height(8.dp))
                 if (accounts.isEmpty()) {
-                    Text("No feeds", style = MaterialTheme.typography.bodyMedium)
+                    Text("No calendars yet", style = MaterialTheme.typography.bodyMedium)
                     Text("Tap to add", style = MaterialTheme.typography.bodySmall, color = OnSlateSecondary)
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
