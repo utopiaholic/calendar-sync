@@ -5,6 +5,7 @@ import com.calmerge.app.data.db.EventInstanceEntity
 import com.calmerge.app.data.db.MergedEvent
 import com.calmerge.app.data.db.ResponseStatus
 import com.calmerge.app.data.db.ShowAs
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,11 +15,8 @@ import java.time.ZoneId
 class EventUiWeekOverlapTest {
 
     private val zone = ZoneId.of("UTC")
-
-    // Monday 2026-06-08 00:00 UTC
-    private val weekStart = LocalDate.of(2026, 6, 8).atStartOfDay(zone).toInstant().toEpochMilli()
-    // Monday 2026-06-15 00:00 UTC
-    private val weekEnd = LocalDate.of(2026, 6, 15).atStartOfDay(zone).toInstant().toEpochMilli()
+    private val today = LocalDate.of(2026, 6, 12)
+    private val startOfToday = today.atStartOfDay(zone).toInstant().toEpochMilli()
 
     private fun timedEvent(startUtc: Long, endUtc: Long): MergedEvent {
         val e = EventInstanceEntity(
@@ -62,43 +60,97 @@ class EventUiWeekOverlapTest {
         return MergedEvent(e, "acc", "Acc", 0, AccountType.ICS)
     }
 
+    // ---- startOfTodayMs ----
+
     @Test
-    fun `event spanning Monday boundary remains visible`() {
-        // Started Sunday, ends Monday: should overlap the Mon–Sun week.
-        val sunday = LocalDate.of(2026, 6, 7).atStartOfDay(zone).toInstant().toEpochMilli()
-        val monday = LocalDate.of(2026, 6, 8).atStartOfDay(zone).toInstant().toEpochMilli() + 3_600_000L
-        assertTrue(EventUi.overlapsWeek(timedEvent(sunday, monday), weekStart, weekEnd, zone))
+    fun `startOfTodayMs returns midnight UTC`() {
+        val ms = EventUi.startOfTodayMs(zone, today)
+        assertEquals(startOfToday, ms)
+    }
+
+    // ---- eventEndMs for timed events ----
+
+    @Test
+    fun `eventEndMs returns endUtc for timed event`() {
+        val start = startOfToday
+        val end = startOfToday + 3_600_000L
+        assertEquals(end, EventUi.eventEndMs(timedEvent(start, end), zone))
     }
 
     @Test
-    fun `event fully inside week is visible`() {
-        val start = LocalDate.of(2026, 6, 10).atStartOfDay(zone).toInstant().toEpochMilli()
-        val end = start + 3_600_000L
-        assertTrue(EventUi.overlapsWeek(timedEvent(start, end), weekStart, weekEnd, zone))
+    fun `eventEndMs falls back to startUtc when endUtc absent`() {
+        val e = EventInstanceEntity(
+            id = "e", calendarSourceId = "s", providerEventId = "p", iCalUId = null,
+            title = "T", startUtc = startOfToday, endUtc = null, isAllDay = false,
+            startDate = null, endDate = null, showAs = ShowAs.BUSY,
+            responseStatus = ResponseStatus.ACCEPTED, location = null,
+            organizer = null, lastModifiedUtc = null,
+        )
+        assertEquals(startOfToday, EventUi.eventEndMs(e, zone))
+    }
+
+    // ---- eventEndMs for all-day events ----
+
+    @Test
+    fun `eventEndMs returns exclusive end date millis for all-day event`() {
+        val event = allDayEvent("2026-06-12", "2026-06-13")
+        val expected = LocalDate.of(2026, 6, 13).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertEquals(expected, EventUi.eventEndMs(event, zone))
     }
 
     @Test
-    fun `event before week is not visible`() {
-        val end = weekStart - 1
+    fun `eventEndMs defaults to start plus one day when endDate absent`() {
+        val e = EventInstanceEntity(
+            id = "e", calendarSourceId = "s", providerEventId = "p", iCalUId = null,
+            title = "T", startUtc = null, endUtc = null, isAllDay = true,
+            startDate = "2026-06-12", endDate = null, showAs = ShowAs.BUSY,
+            responseStatus = ResponseStatus.ACCEPTED, location = null,
+            organizer = null, lastModifiedUtc = null,
+        )
+        val expected = LocalDate.of(2026, 6, 13).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertEquals(expected, EventUi.eventEndMs(e, zone))
+    }
+
+    // ---- isPast ----
+
+    @Test
+    fun `event ending yesterday is past`() {
+        val yesterday = today.minusDays(1)
+        val end = yesterday.atStartOfDay(zone).toInstant().toEpochMilli() + 3_600_000L
         val start = end - 3_600_000L
-        assertFalse(EventUi.overlapsWeek(timedEvent(start, end), weekStart, weekEnd, zone))
+        assertTrue(EventUi.isPast(timedEvent(start, end), zone, startOfToday))
     }
 
     @Test
-    fun `event starting exactly at weekEnd is not visible`() {
-        // [weekStart, weekEnd) is exclusive at weekEnd.
-        assertTrue(EventUi.overlapsWeek(timedEvent(weekEnd - 1, weekEnd + 3_600_000L), weekStart, weekEnd, zone))
-        assertFalse(EventUi.overlapsWeek(timedEvent(weekEnd, weekEnd + 3_600_000L), weekStart, weekEnd, zone))
+    fun `event ending exactly at start of today is past`() {
+        // A timed event ending at midnight (startOfToday) is fully over — classified as past.
+        assertTrue(EventUi.isPast(timedEvent(startOfToday - 3_600_000L, startOfToday), zone, startOfToday))
     }
 
     @Test
-    fun `all-day event spanning Monday boundary remains visible`() {
-        // 2026-06-07 to 2026-06-09 (exclusive end) spans into the week starting 2026-06-08.
-        assertTrue(EventUi.overlapsWeek(allDayEvent("2026-06-07", "2026-06-09"), weekStart, weekEnd, zone))
+    fun `event starting and ending today is not past`() {
+        assertFalse(EventUi.isPast(timedEvent(startOfToday, startOfToday + 3_600_000L), zone, startOfToday))
     }
 
     @Test
-    fun `all-day event fully before week is not visible`() {
-        assertFalse(EventUi.overlapsWeek(allDayEvent("2026-06-05", "2026-06-08"), weekStart, weekEnd, zone))
+    fun `event starting tomorrow is not past`() {
+        val tomorrowStart = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertFalse(EventUi.isPast(timedEvent(tomorrowStart, tomorrowStart + 3_600_000L), zone, startOfToday))
+    }
+
+    @Test
+    fun `all-day event on yesterday is past`() {
+        assertTrue(EventUi.isPast(allDayEvent("2026-06-11", "2026-06-12"), zone, startOfToday))
+    }
+
+    @Test
+    fun `all-day event on today is not past`() {
+        assertFalse(EventUi.isPast(allDayEvent("2026-06-12", "2026-06-13"), zone, startOfToday))
+    }
+
+    @Test
+    fun `multi-day event spanning today is not past`() {
+        // Started yesterday, ends tomorrow — ongoing, should be Upcoming.
+        assertFalse(EventUi.isPast(allDayEvent("2026-06-11", "2026-06-14"), zone, startOfToday))
     }
 }

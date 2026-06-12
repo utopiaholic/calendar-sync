@@ -99,4 +99,15 @@ class ConflictClusterMapperTest {
         assertEquals("c1", clusters[0].clusterId)
         assertEquals("c2", clusters[1].clusterId)
     }
+
+    @Test
+    fun `endKeyMs reflects the latest member end`() {
+        // Two members: start 1000/end 4600, start 3000/end 6600
+        val rows = listOf(
+            row("c1", "a", startUtc = 1_000L),   // endUtc = 1000 + 3_600_000
+            row("c1", "b", startUtc = 3_000L),   // endUtc = 3000 + 3_600_000 (later)
+        )
+        val cluster = ConflictClusterMapper.toClusterUi(rows, zone).single()
+        assertEquals(3_000L + 3_600_000L, cluster.endKeyMs)
+    }
 }

@@ -34,6 +34,7 @@ object ConflictClusterMapper {
                 clusterId = clusterId,
                 members = sortedCollapsed,
                 sortKeyMs = members.minOf { m -> EventUi.sortKeyMs(m.event, zone) },
+                endKeyMs = members.maxOf { m -> EventUi.eventEndMs(m.event, zone) },
             )
         }.sortedBy { it.sortKeyMs }
     }

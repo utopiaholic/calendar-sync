@@ -1,5 +1,7 @@
 package com.calmerge.app.ui
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,15 +10,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.rounded.KeyboardArrowRight
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -27,11 +36,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -109,6 +120,7 @@ fun CalendarScreen(
             mode = mode,
             onModeChange = { mode = it },
             dates = dates,
+            anchorDate = anchorDate,
             zone = zone,
             onPrev = {
                 anchorDate = if (mode == CalendarMode.DAY) anchorDate.minusDays(1) else anchorDate.minusWeeks(1)
@@ -116,7 +128,7 @@ fun CalendarScreen(
             onNext = {
                 anchorDate = if (mode == CalendarMode.DAY) anchorDate.plusDays(1) else anchorDate.plusWeeks(1)
             },
-            onToday = { anchorDate = LocalDate.now(zone) },
+            onPickDate = { anchorDate = it },
         )
 
         HorizontalDivider()
@@ -169,52 +181,103 @@ fun CalendarScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CalendarNavHeader(
     mode: CalendarMode,
     onModeChange: (CalendarMode) -> Unit,
     dates: List<LocalDate>,
+    anchorDate: LocalDate,
     zone: ZoneId,
     onPrev: () -> Unit,
     onNext: () -> Unit,
-    onToday: () -> Unit,
+    onPickDate: (LocalDate) -> Unit,
 ) {
+    val today = LocalDate.now(zone)
+    // Highlight when the current view contains today.
+    val isOnToday = today in dates
+
     val label = when (mode) {
-        CalendarMode.DAY -> {
-            val d = dates.first()
-            d.format(DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.getDefault()))
-        }
+        CalendarMode.DAY -> dates.first()
+            .format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault()))
         CalendarMode.WEEK -> {
             val start = dates.first()
             val end = dates.last()
             if (start.month == end.month) {
-                "${start.format(DateTimeFormatter.ofPattern("MMM d"))}–${end.dayOfMonth}, ${start.year}"
+                "${start.format(DateTimeFormatter.ofPattern("MMM d"))}–${end.dayOfMonth}"
             } else {
-                "${start.format(DateTimeFormatter.ofPattern("MMM d"))} – ${end.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}"
+                "${start.format(DateTimeFormatter.ofPattern("MMM d"))} – ${end.format(DateTimeFormatter.ofPattern("MMM d"))}"
             }
         }
     }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
-    ) {
-        IconButton(onClick = onPrev) { Text("‹", fontSize = 20.sp) }
-        Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-        TextButton(onClick = onToday) { Text("Today") }
-        IconButton(onClick = onNext) { Text("›", fontSize = 20.sp) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
-        SingleChoiceSegmentedButtonRow {
-            SegmentedButton(
-                selected = mode == CalendarMode.DAY,
-                onClick = { onModeChange(CalendarMode.DAY) },
-                shape = SegmentedButtonDefaults.itemShape(0, 2),
-            ) { Text("Day") }
-            SegmentedButton(
-                selected = mode == CalendarMode.WEEK,
-                onClick = { onModeChange(CalendarMode.WEEK) },
-                shape = SegmentedButtonDefaults.itemShape(1, 2),
-            ) { Text("Week") }
+    if (showDatePicker) {
+        val initialMs = anchorDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val dpState = rememberDatePickerState(initialSelectedDateMillis = initialMs)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dpState.selectedDateMillis?.let { ms ->
+                        onPickDate(Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate())
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            },
+        ) {
+            DatePicker(state = dpState)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Row 1: mode switcher — same centered control as Agenda/Conflicts tabs.
+        CenteredSegmentedTabs(
+            options = listOf("Day", "Week"),
+            selectedIndex = if (mode == CalendarMode.DAY) 0 else 1,
+            onSelect = { onModeChange(if (it == 0) CalendarMode.DAY else CalendarMode.WEEK) },
+        )
+
+        // Row 2: date navigation — arrows flank a tappable date label that opens the picker.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp)
+                .padding(bottom = 4.dp),
+        ) {
+            IconButton(onClick = onPrev) {
+                Icon(Icons.Rounded.KeyboardArrowLeft, contentDescription = "Previous")
+            }
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { showDatePicker = true }
+                    .padding(vertical = 6.dp),
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (isOnToday) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                )
+                Icon(
+                    Icons.Rounded.ArrowDropDown,
+                    contentDescription = "Pick date",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onNext) {
+                Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = "Next")
+            }
         }
     }
 }

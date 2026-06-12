@@ -55,13 +55,27 @@ class SettingsStore(context: Context) {
         _allDayConflictsWithTimed.value = v
     }
 
+    // ---- Conflict lookahead window ----
+    /** Days ahead from today to include in home screen conflict counts. Default: 7. */
+    private val _conflictLookaheadDays = MutableStateFlow(
+        prefs.getInt(KEY_LOOKAHEAD_DAYS, DEFAULT_LOOKAHEAD_DAYS)
+    )
+    val conflictLookaheadDays: StateFlow<Int> = _conflictLookaheadDays.asStateFlow()
+
+    fun setConflictLookaheadDays(days: Int) {
+        prefs.edit().putInt(KEY_LOOKAHEAD_DAYS, days).apply()
+        _conflictLookaheadDays.value = days
+    }
+
     companion object {
         const val DEFAULT_SYNC_INTERVAL = 30L
         const val MANUAL_SYNC = 0L
+        const val DEFAULT_LOOKAHEAD_DAYS = 7
 
         private const val KEY_SYNC_INTERVAL = "sync_interval_minutes"
         private const val KEY_INCLUDE_TENTATIVE = "conflict_include_tentative"
         private const val KEY_INCLUDE_OOF = "conflict_include_oof"
         private const val KEY_ALLDAY_CONFLICTS_TIMED = "conflict_allday_vs_timed"
+        private const val KEY_LOOKAHEAD_DAYS = "conflict_lookahead_days"
     }
 }

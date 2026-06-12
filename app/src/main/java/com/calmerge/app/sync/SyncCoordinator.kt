@@ -7,6 +7,8 @@ import com.calmerge.app.data.db.AppDatabase
 import com.calmerge.app.data.db.ConflictClusterEntity
 import com.calmerge.app.data.db.ConflictMemberEntity
 import com.calmerge.app.settings.SettingsStore
+import java.net.SocketException
+import java.net.UnknownHostException
 import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
@@ -32,7 +34,13 @@ class SyncCoordinator(
                 icsEngine.sync(account, window)
                 db.accountDao().markSyncSuccess(account.id, now.toEpochMilli())
             } catch (e: Exception) {
-                db.accountDao().markSyncFailure(account.id, e.message ?: e.javaClass.simpleName, AccountStatus.ERROR)
+                if (isTransientNetworkError(e)) {
+                    // Connectivity failure (e.g. background DNS restriction under Doze/battery saver).
+                    // Don't clobber the account's last-known status — the WorkManager will retry.
+                    Log.w(TAG, "Transient network error for ${account.id}, skipping status update", e)
+                } else {
+                    db.accountDao().markSyncFailure(account.id, e.message ?: e.javaClass.simpleName, AccountStatus.ERROR)
+                }
             }
         }
         try {
@@ -63,6 +71,15 @@ class SyncCoordinator(
         for (group in Deduper.computeGroups(dao.getAll())) {
             dao.setDedupeGroup(UUID.randomUUID().toString(), group.eventIds)
         }
+    }
+
+    companion object {
+        private const val TAG = "SyncCoordinator"
+
+        /** True for errors caused by temporary network unavailability rather than bad feed data. */
+        private fun isTransientNetworkError(e: Throwable): Boolean =
+            e is UnknownHostException || e is SocketException ||
+                (e.cause != null && isTransientNetworkError(e.cause!!))
     }
 
     /** FR-17: conflict computation runs after every sync; results cached in SQLite. */

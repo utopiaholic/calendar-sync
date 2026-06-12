@@ -10,9 +10,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -38,12 +41,21 @@ private val SYNC_OPTIONS = listOf(
     SettingsStore.MANUAL_SYNC to "Manual only",
 )
 
+private val LOOKAHEAD_OPTIONS = listOf(
+    1 to "Today only",
+    3 to "Next 3 days",
+    7 to "Next week",
+    14 to "Next 2 weeks",
+    30 to "Next month",
+)
+
 @Composable
-fun SettingsScreen(viewModel: MainViewModel) {
+fun SettingsScreen(viewModel: MainViewModel, onOpenFeeds: () -> Unit = {}) {
     val syncInterval by viewModel.syncIntervalMinutes.collectAsState()
     val includeTentative by viewModel.includeTentative.collectAsState()
     val includeOof by viewModel.includeOof.collectAsState()
     val allDayVsTimed by viewModel.allDayConflictsWithTimed.collectAsState()
+    val lookaheadDays by viewModel.conflictLookaheadDays.collectAsState()
     var showWipeConfirm by remember { mutableStateOf(false) }
 
     if (showWipeConfirm) {
@@ -72,6 +84,24 @@ fun SettingsScreen(viewModel: MainViewModel) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
+        // ---- Feeds link ----
+        SectionHeader("Feeds")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Manage feeds", style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = onOpenFeeds) {
+                Text("Open")
+                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null)
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
         // ---- Sync interval ----
         SectionHeader("Background sync interval (FR-9)")
         SYNC_OPTIONS.forEach { (minutes, label) ->
@@ -121,10 +151,35 @@ fun SettingsScreen(viewModel: MainViewModel) {
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
+        // ---- Conflict lookahead window ----
+        SectionHeader("Conflict window")
+        Text(
+            "Conflicts highlighted on the home screen.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        LOOKAHEAD_OPTIONS.forEach { (days, label) ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                RadioButton(
+                    selected = lookaheadDays == days,
+                    onClick = { viewModel.setConflictLookaheadDays(days) },
+                )
+                Text(label, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
         // ---- Data management (NFR-6) ----
         SectionHeader("Data")
         Text(
-            "Disconnecting individual feeds removes their events — see the Feeds tab. The button below removes everything.",
+            "Disconnecting individual feeds removes their events — see Feeds. The button below removes everything.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 12.dp),

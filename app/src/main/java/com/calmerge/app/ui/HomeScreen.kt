@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -64,7 +65,7 @@ fun HomeScreen(
     onOpenConflicts: () -> Unit,
 ) {
     val accounts by viewModel.accounts.collectAsState()
-    val clusters by viewModel.conflictClusters.collectAsState()
+    val windowedClusters by viewModel.windowedConflictClusters.collectAsState()
     val mergedEvents by viewModel.mergedEvents.collectAsState()
     val syncing by viewModel.syncing.collectAsState()
     val zone = ZoneId.systemDefault()
@@ -86,7 +87,7 @@ fun HomeScreen(
         }
     }
 
-    val nextCluster = remember(clusters) { clusters.firstOrNull() }
+    val nextCluster = remember(windowedClusters) { windowedClusters.firstOrNull() }
     val activeFeeds = accounts.filter { it.status == AccountStatus.ACTIVE }
     val failingFeeds = accounts.filter { it.status != AccountStatus.ACTIVE }
 
@@ -114,7 +115,10 @@ fun HomeScreen(
                     color = OnSlateSecondary,
                 )
             }
-            IconButton(onClick = onOpenSettings) {
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.offset(x = 12.dp),
+            ) {
                 Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = OnSlateSecondary)
             }
         }
@@ -123,7 +127,7 @@ fun HomeScreen(
 
         // ── Summary pill ────────────────────────────────────────────────
         AnimatedContent(
-            targetState = todayEvents.size to clusters.size,
+            targetState = todayEvents.size to windowedClusters.size,
             transitionSpec = {
                 fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
                     fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
@@ -138,7 +142,7 @@ fun HomeScreen(
             ) {
                 val parts = buildList {
                     add("$eventCount ${if (eventCount == 1) "event" else "events"} today")
-                    if (conflictCount > 0) add("$conflictCount ${if (conflictCount == 1) "conflict" else "conflicts"}")
+                    if (conflictCount > 0) add("$conflictCount upcoming ${if (conflictCount == 1) "conflict" else "conflicts"}")
                 }
                 Text(
                     parts.joinToString("  ·  "),
@@ -202,15 +206,15 @@ fun HomeScreen(
             // Next conflict card
             BentoCard(
                 modifier = Modifier.weight(1f),
-                onClick = if (clusters.isEmpty()) null else onOpenConflicts,
+                onClick = if (windowedClusters.isEmpty()) null else onOpenConflicts,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Conflicts", style = MaterialTheme.typography.titleSmall, color = OnSlateSecondary)
-                    if (clusters.isNotEmpty()) {
+                    Text("Upcoming Conflicts", style = MaterialTheme.typography.titleSmall, color = OnSlateSecondary)
+                    if (windowedClusters.isNotEmpty()) {
                         Icon(
                             Icons.Rounded.Warning,
                             contentDescription = null,
@@ -230,7 +234,7 @@ fun HomeScreen(
                     Text("No conflicts ahead", style = MaterialTheme.typography.bodySmall, color = OnSlateSecondary)
                 } else {
                     Text(
-                        "${clusters.size}",
+                        "${windowedClusters.size}",
                         style = MaterialTheme.typography.headlineMedium,
                         color = ConflictRed,
                         fontWeight = FontWeight.Bold,

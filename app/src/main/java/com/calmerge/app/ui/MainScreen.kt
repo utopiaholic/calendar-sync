@@ -68,7 +68,7 @@ fun MainScreen(viewModel: MainViewModel) {
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.HOME) }
     var prevTabOrdinal by rememberSaveable { mutableStateOf(0) }
     var subScreen by rememberSaveable { mutableStateOf<SubScreen?>(null) }
-    val clusters by viewModel.conflictClusters.collectAsState()
+    val windowedClusters by viewModel.windowedConflictClusters.collectAsState()
     var navBarVisible by remember { mutableStateOf(true) }
 
     BackHandler(enabled = subScreen != null) { subScreen = null }
@@ -117,8 +117,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                 navBarVisible = true
                             },
                             icon = {
-                                if (tab == MainTab.CONFLICTS && clusters.isNotEmpty()) {
-                                    BadgedBox(badge = { Badge { Text("${clusters.size}") } }) {
+                                if (tab == MainTab.CONFLICTS && windowedClusters.isNotEmpty()) {
+                                    BadgedBox(badge = { Badge { Text("${windowedClusters.size}") } }) {
                                         Icon(tab.icon, contentDescription = null)
                                     }
                                 } else {
@@ -162,6 +162,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         onOpenFeeds = { subScreen = SubScreen.FEEDS },
                         onOpenSettings = { subScreen = SubScreen.SETTINGS },
                         onOpenAgenda = {
+                            viewModel.agendaFilter.value = AgendaFilter.UPCOMING
                             prevTabOrdinal = selectedTab.ordinal
                             selectedTab = MainTab.AGENDA
                         },
@@ -204,7 +205,10 @@ fun MainScreen(viewModel: MainViewModel) {
                 ) {
                     when (lastSubScreen) {
                         SubScreen.FEEDS -> FeedsScreen(viewModel)
-                        SubScreen.SETTINGS -> SettingsScreen(viewModel)
+                        SubScreen.SETTINGS -> SettingsScreen(
+                            viewModel = viewModel,
+                            onOpenFeeds = { subScreen = SubScreen.FEEDS },
+                        )
                     }
                 }
             }

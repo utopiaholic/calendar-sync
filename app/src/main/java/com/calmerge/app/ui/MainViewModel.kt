@@ -14,12 +14,14 @@ import com.calmerge.app.work.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.time.ZoneId
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-enum class AgendaFilter { WEEK, ALL }
+enum class AgendaFilter { UPCOMING, PAST }
 
 private const val TAG = "MainViewModel"
 
@@ -29,6 +31,8 @@ data class ConflictClusterUi(
     /** Members collapsed by dedupe group: representative + all copies. */
     val members: List<Pair<ConflictMemberRow, List<ConflictMemberRow>>>,
     val sortKeyMs: Long,
+    /** Latest end of any member event; used for past/upcoming partitioning. */
+    val endKeyMs: Long,
 )
 
 class MainViewModel(private val app: CalMergeApp) : ViewModel() {
@@ -65,8 +69,33 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
         .map { rows -> ConflictClusterMapper.toClusterUi(rows) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** Default WEEK: limits the agenda to the current week for easier scanning/testing. */
-    val agendaFilter = MutableStateFlow(AgendaFilter.WEEK)
+    /** Clusters from today onward, ascending — drives the Conflicts tab's Upcoming view. */
+    val upcomingConflictClusters: StateFlow<List<ConflictClusterUi>> = conflictClusters
+        .map { clusters ->
+            val startOfToday = EventUi.startOfTodayMs(ZoneId.systemDefault())
+            clusters.filter { it.endKeyMs > startOfToday }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Past clusters, most recent first — drives the Conflicts tab's Past view. */
+    val pastConflictClusters: StateFlow<List<ConflictClusterUi>> = conflictClusters
+        .map { clusters ->
+            val startOfToday = EventUi.startOfTodayMs(ZoneId.systemDefault())
+            clusters.filter { it.endKeyMs <= startOfToday }.reversed()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Clusters within the user-configured lookahead window — drives home screen counts. */
+    val windowedConflictClusters: StateFlow<List<ConflictClusterUi>> = conflictClusters
+        .combine(app.settings.conflictLookaheadDays) { clusters, days ->
+            val startOfToday = EventUi.startOfTodayMs(ZoneId.systemDefault())
+            val windowEnd = startOfToday + days.toLong() * 86_400_000L
+            clusters.filter { it.endKeyMs > startOfToday && it.sortKeyMs < windowEnd }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Default UPCOMING: shows events from today onward for easy scanning. */
+    val agendaFilter = MutableStateFlow(AgendaFilter.UPCOMING)
 
     val syncing = MutableStateFlow(false)
 
@@ -141,6 +170,7 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
     val includeTentative: StateFlow<Boolean> = app.settings.includeTentative
     val includeOof: StateFlow<Boolean> = app.settings.includeOof
     val allDayConflictsWithTimed: StateFlow<Boolean> = app.settings.allDayConflictsWithTimed
+    val conflictLookaheadDays: StateFlow<Int> = app.settings.conflictLookaheadDays
 
     fun setSyncInterval(minutes: Long) {
         app.settings.setSyncInterval(minutes)
@@ -165,6 +195,10 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
     fun setAllDayConflictsWithTimed(v: Boolean) {
         app.settings.setAllDayConflictsWithTimed(v)
         viewModelScope.launch { recomputeDerived("setAllDayConflictsWithTimed") }
+    }
+
+    fun setConflictLookaheadDays(days: Int) {
+        app.settings.setConflictLookaheadDays(days)
     }
 
     /** NFR-6: wipe all accounts and events (cascade). */

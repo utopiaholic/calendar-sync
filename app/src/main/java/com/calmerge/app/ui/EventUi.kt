@@ -27,6 +27,36 @@ object EventUi {
     fun sortKeyMs(event: MergedEvent, zone: ZoneId): Long =
         sortKeyMs(event.event, zone)
 
+    /** Epoch millis of start-of-today in the given zone. */
+    fun startOfTodayMs(zone: ZoneId, today: LocalDate = LocalDate.now(zone)): Long =
+        today.atStartOfDay(zone).toInstant().toEpochMilli()
+
+    /**
+     * Exclusive end of an event in epoch millis, used for past/upcoming partitioning.
+     * All-day: end date → local zone millis (exclusive), defaulting to start + 1 day.
+     * Timed: endUtc, falling back to startUtc so zero-duration events are not treated as end=0.
+     */
+    fun eventEndMs(event: EventInstanceEntity, zone: ZoneId): Long =
+        if (event.isAllDay) {
+            isoDateToEpochMillisOrNull(event.endDate, zone)
+                ?: ((isoDateToEpochMillisOrNull(event.startDate, zone) ?: 0L) + 86_400_000L)
+        } else {
+            event.endUtc ?: event.startUtc ?: 0L
+        }
+
+    fun eventEndMs(event: MergedEvent, zone: ZoneId): Long = eventEndMs(event.event, zone)
+
+    /**
+     * True when the event is fully in the past.
+     * Uses <= so all-day events with an exclusive end-date equal to today's midnight
+     * (e.g. a yesterday event with endDate "2026-06-12") are correctly classified as past.
+     */
+    fun isPast(event: EventInstanceEntity, zone: ZoneId, todayStartMs: Long = startOfTodayMs(zone)): Boolean =
+        eventEndMs(event, zone) <= todayStartMs
+
+    fun isPast(event: MergedEvent, zone: ZoneId, todayStartMs: Long = startOfTodayMs(zone)): Boolean =
+        isPast(event.event, zone, todayStartMs)
+
     /**
      * Local date an event appears under in the agenda.
      * LocalDate.MAX gives malformed rows a far-future header instead of crashing display code.
@@ -35,33 +65,6 @@ object EventUi {
         parseIsoDateOrNull(event.event.startDate)
             ?: event.event.startUtc?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
             ?: LocalDate.MAX
-
-    /** Monday 00:00 (inclusive) to next Monday 00:00 (exclusive) of the week containing today. */
-    fun currentWeekBounds(zone: ZoneId, today: LocalDate = LocalDate.now(zone)): Pair<Long, Long> {
-        val monday = today.minusDays((today.dayOfWeek.value - 1).toLong())
-        return monday.atStartOfDay(zone).toInstant().toEpochMilli() to
-            monday.plusDays(7).atStartOfDay(zone).toInstant().toEpochMilli()
-    }
-
-    /**
-     * Returns true if the event's time range overlaps [weekStart, weekEnd).
-     *
-     * For timed events the range is [startUtc, endUtc) — falling back to startUtc when endUtc
-     * is absent. For all-day events the date range is converted to local-zone millis.
-     * This correctly includes events that started before weekStart but are still ongoing.
-     */
-    fun overlapsWeek(event: MergedEvent, weekStart: Long, weekEnd: Long, zone: ZoneId): Boolean {
-        return if (event.event.isAllDay) {
-            val startMs = isoDateToEpochMillisOrNull(event.event.startDate, zone) ?: return false
-            val endMs = isoDateToEpochMillisOrNull(event.event.endDate, zone)
-                ?: (startMs + 86_400_000L) // endDate is exclusive; default one day
-            startMs < weekEnd && endMs > weekStart
-        } else {
-            val startMs = event.event.startUtc ?: return false
-            val endMs = event.event.endUtc ?: startMs
-            startMs < weekEnd && endMs > weekStart
-        }
-    }
 
     fun timeRangeText(event: MergedEvent, zone: ZoneId): String {
         val e = event.event

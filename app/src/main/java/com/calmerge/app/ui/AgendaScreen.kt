@@ -20,9 +20,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -65,16 +62,17 @@ fun AgendaScreen(viewModel: MainViewModel) {
 
     val filtered = remember(events, filter) {
         val collapsed = EventUi.collapseDuplicates(events)
+        val todayStartMs = EventUi.startOfTodayMs(zone)
         when (filter) {
-            AgendaFilter.WEEK -> {
-                val (weekStart, weekEnd) = EventUi.currentWeekBounds(zone)
-                collapsed.filter { (rep, copies) ->
-                    copies.any { EventUi.overlapsWeek(it, weekStart, weekEnd, zone) } ||
-                        EventUi.overlapsWeek(rep, weekStart, weekEnd, zone)
-                }
-            }
-            AgendaFilter.ALL -> collapsed
-        }.sortedBy { (rep, _) -> EventUi.sortKeyMs(rep, zone) }
+            AgendaFilter.UPCOMING ->
+                collapsed
+                    .filter { (rep, _) -> !EventUi.isPast(rep, zone, todayStartMs) }
+                    .sortedBy { (rep, _) -> EventUi.sortKeyMs(rep, zone) }
+            AgendaFilter.PAST ->
+                collapsed
+                    .filter { (rep, _) -> EventUi.isPast(rep, zone, todayStartMs) }
+                    .sortedByDescending { (rep, _) -> EventUi.sortKeyMs(rep, zone) }
+        }
     }
 
     selectedEvent?.let { event ->
@@ -91,20 +89,11 @@ fun AgendaScreen(viewModel: MainViewModel) {
             )
         }
 
-        SingleChoiceSegmentedButtonRow(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        ) {
-            SegmentedButton(
-                selected = filter == AgendaFilter.WEEK,
-                onClick = { viewModel.agendaFilter.value = AgendaFilter.WEEK },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-            ) { Text("This week") }
-            SegmentedButton(
-                selected = filter == AgendaFilter.ALL,
-                onClick = { viewModel.agendaFilter.value = AgendaFilter.ALL },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-            ) { Text("All (±window)") }
-        }
+        CenteredSegmentedTabs(
+            options = listOf("Upcoming", "Past"),
+            selectedIndex = if (filter == AgendaFilter.UPCOMING) 0 else 1,
+            onSelect = { viewModel.agendaFilter.value = if (it == 0) AgendaFilter.UPCOMING else AgendaFilter.PAST },
+        )
 
         if (filtered.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -115,7 +104,7 @@ fun AgendaScreen(viewModel: MainViewModel) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        if (filter == AgendaFilter.WEEK) "Nothing scheduled this week" else "No events synced",
+                        if (filter == AgendaFilter.UPCOMING) "Nothing upcoming" else "No past events",
                         style = MaterialTheme.typography.bodySmall,
                         color = OnSlateSecondary,
                     )
