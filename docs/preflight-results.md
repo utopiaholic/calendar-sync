@@ -69,7 +69,7 @@ select the calendar, permission "Can view all details" → copy the **ICS** link
    - Add `albertvincentreyes@gmail.com` under **Test users**.
    - Scopes: add `https://www.googleapis.com/auth/calendar.readonly` (non-sensitive scope entry is fine; no verification needed in Testing).
 4. **Credentials → Create credentials → OAuth client ID → Android:**
-   - Package name: `dev.albert.calmerge`
+   - Package name: `com.calmerge.app`
    - SHA-1: debug keystore fingerprint (captured in Phase 0 — see below).
 5. Record:
 

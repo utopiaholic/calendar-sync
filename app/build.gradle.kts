@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "dev.albert.calmerge"
+    namespace = "com.calmerge.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "dev.albert.calmerge"
+        applicationId = "com.calmerge.app"
         minSdk = 31
         targetSdk = 35
         versionCode = 1
