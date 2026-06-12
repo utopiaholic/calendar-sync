@@ -7,17 +7,30 @@ import dev.albert.calmerge.CalMergeApp
 import dev.albert.calmerge.data.db.AccountEntity
 import dev.albert.calmerge.data.db.AccountType
 import dev.albert.calmerge.data.db.CalendarSourceEntity
+import dev.albert.calmerge.data.db.ConflictMemberRow
 import dev.albert.calmerge.data.db.MergedEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.ZoneId
 import java.util.UUID
+
+enum class AgendaFilter { WEEK, ALL }
+
+/** One conflict cluster prepared for display, soonest first (FR-21). */
+data class ConflictClusterUi(
+    val clusterId: String,
+    /** Members collapsed by dedupe group: representative + all copies. */
+    val members: List<Pair<ConflictMemberRow, List<ConflictMemberRow>>>,
+    val sortKeyMs: Long,
+)
 
 class MainViewModel(private val app: CalMergeApp) : ViewModel() {
 
-    /** Distinct badge colors assigned to feeds in connect order; cycles if exhausted. */
+    /** Distinct badge colors assigned to feeds in connect order; cycles by usage count only when palette exhausted. */
     private val palette = listOf(
         0xFF1A73E8.toInt(), // blue
         0xFFD93025.toInt(), // red
@@ -40,10 +53,41 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
     val mergedEvents: StateFlow<List<MergedEvent>> = app.db.eventInstanceDao().observeMerged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Event ids carrying a red conflict badge in the agenda (FR-19). */
+    val conflictedEventIds: StateFlow<Set<String>> = app.db.conflictDao().observeConflictedEventIds()
+        .map { it.toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    val conflictClusters: StateFlow<List<ConflictClusterUi>> = app.db.conflictDao().observeConflictMembers()
+        .map { rows -> ConflictClusterMapper.toClusterUi(rows) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Default WEEK: limits the agenda to the current week for easier scanning/testing. */
+    val agendaFilter = MutableStateFlow(AgendaFilter.WEEK)
+
     val syncing = MutableStateFlow(false)
+
+    /**
+     * Non-null when addIcsAccount rejects a duplicate URL (FR-3).
+     * Cleared by the dialog on dismiss or when url input changes.
+     */
+    val addFeedError = MutableStateFlow<String?>(null)
+
+    /**
+     * Flips to true momentarily when an account is successfully inserted so the
+     * dialog can close itself. Reset to false after consumption.
+     */
+    val addFeedSuccess = MutableStateFlow(false)
 
     fun addIcsAccount(name: String, url: String) {
         viewModelScope.launch {
+            val normalized = normalizeUrl(url)
+            val duplicate = accounts.value.any { normalizeUrl(it.icsUrl ?: "") == normalized }
+            if (duplicate) {
+                addFeedError.value = "This feed is already added"
+                return@launch
+            }
+            addFeedError.value = null
             app.db.accountDao().upsert(
                 AccountEntity(
                     id = UUID.randomUUID().toString(),
@@ -54,8 +98,17 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
                     icsUrl = url.trim(),
                 ),
             )
+            addFeedSuccess.value = true
             syncNow()
         }
+    }
+
+    fun clearAddFeedError() {
+        addFeedError.value = null
+    }
+
+    fun consumeAddFeedSuccess() {
+        addFeedSuccess.value = false
     }
 
     fun syncNow() {
@@ -71,20 +124,63 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
     }
 
     fun setSourceIncluded(sourceId: String, included: Boolean) {
-        viewModelScope.launch { app.db.calendarSourceDao().setIncluded(sourceId, included) }
+        viewModelScope.launch {
+            app.db.calendarSourceDao().setIncluded(sourceId, included)
+            try {
+                app.syncCoordinator.recomputeDerivedState()
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "recomputeDerivedState failed after setSourceIncluded", e)
+            }
+        }
     }
 
     /** NFR-6: disconnecting removes the feed URL and (via FK cascade) all cached events. */
     fun removeAccount(account: AccountEntity) {
-        viewModelScope.launch { app.db.accountDao().delete(account.id) }
+        viewModelScope.launch {
+            app.db.accountDao().delete(account.id)
+            try {
+                app.syncCoordinator.recomputeDerivedState()
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "recomputeDerivedState failed after removeAccount", e)
+            }
+        }
     }
 
-    private fun nextColor(): Int = palette[accounts.value.size % palette.size]
+    /** Pick the first palette color not currently used; cycle by usage count only when all are taken. */
+    private fun nextColor(): Int {
+        val usedColors = accounts.value.map { it.color }.toSet()
+        val unused = palette.firstOrNull { it !in usedColors }
+        if (unused != null) return unused
+        // All palette colors are in use — cycle by least-used.
+        val usageCounts = palette.associateWith { color -> accounts.value.count { it.color == color } }
+        return palette.minByOrNull { usageCounts[it] ?: 0 } ?: palette[0]
+    }
 
     companion object {
         fun factory(app: CalMergeApp) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T = MainViewModel(app) as T
         }
+    }
+}
+
+/**
+ * Normalizes a URL for duplicate detection: trims whitespace, lowercases
+ * scheme+host, strips a single trailing slash. Pure function — no Android
+ * framework classes — so it is unit-testable on the JVM.
+ */
+fun normalizeUrl(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return ""
+    return try {
+        val uri = java.net.URI(trimmed)
+        val scheme = (uri.scheme ?: "").lowercase()
+        val authority = (uri.authority ?: "").lowercase()
+        val path = uri.path ?: ""
+        val normalizedPath = if (path.endsWith("/") && path.length > 1) path.dropLast(1) else path
+        val query = uri.rawQuery?.let { "?$it" } ?: ""
+        "$scheme://$authority$normalizedPath$query"
+    } catch (_: Exception) {
+        trimmed.lowercase()
     }
 }

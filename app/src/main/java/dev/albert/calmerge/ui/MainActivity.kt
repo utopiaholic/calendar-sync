@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface {
-                    DebugScreen(viewModel = viewModel)
+                    MainScreen(viewModel = viewModel)
                 }
             }
         }

@@ -85,6 +85,16 @@ interface EventInstanceDao {
     @Query("SELECT * FROM event_instances")
     suspend fun getAll(): List<EventInstanceEntity>
 
+    /** FR-5: returns only events whose calendar source has included = 1 (for conflict pipeline). */
+    @Query(
+        """
+        SELECT e.* FROM event_instances e
+        JOIN calendar_sources c ON e.calendarSourceId = c.id
+        WHERE c.included = 1
+        """,
+    )
+    suspend fun getAllIncluded(): List<EventInstanceEntity>
+
     @Query(
         """
         SELECT e.*, a.id AS accountId, a.displayName AS accountName, a.color AS accountColor, a.type AS accountType
@@ -102,4 +112,51 @@ interface EventInstanceDao {
 
     @Query("UPDATE event_instances SET dedupeGroupId = :groupId WHERE id IN (:eventIds)")
     suspend fun setDedupeGroup(groupId: String, eventIds: List<String>)
+}
+
+/** Conflict member joined with its event + account for the Conflicts tab. */
+data class ConflictMemberRow(
+    val clusterId: String,
+    @Embedded val event: EventInstanceEntity,
+    val accountId: String,
+    val accountName: String,
+    val accountColor: Int,
+    val accountType: AccountType,
+)
+
+@Dao
+interface ConflictDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertClusters(clusters: List<ConflictClusterEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMembers(members: List<ConflictMemberEntity>)
+
+    @Query("DELETE FROM conflict_clusters")
+    suspend fun deleteAll()
+
+    /** FR-17: atomically replace the cached conflict set after a sync. */
+    @Transaction
+    suspend fun replaceAll(clusters: List<ConflictClusterEntity>, members: List<ConflictMemberEntity>) {
+        deleteAll()
+        insertClusters(clusters)
+        insertMembers(members)
+    }
+
+    /** Ids of every event involved in any conflict — drives agenda badges (FR-19). */
+    @Query("SELECT DISTINCT eventInstanceId FROM conflict_members")
+    fun observeConflictedEventIds(): Flow<List<String>>
+
+    @Query(
+        """
+        SELECT m.clusterId, e.*, a.id AS accountId, a.displayName AS accountName,
+               a.color AS accountColor, a.type AS accountType
+        FROM conflict_members m
+        JOIN event_instances e ON m.eventInstanceId = e.id
+        JOIN calendar_sources c ON e.calendarSourceId = c.id
+        JOIN accounts a ON c.accountId = a.id
+        ORDER BY COALESCE(e.startUtc, 0), e.startDate
+        """
+    )
+    fun observeConflictMembers(): Flow<List<ConflictMemberRow>>
 }

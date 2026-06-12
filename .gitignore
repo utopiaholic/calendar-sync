@@ -13,3 +13,7 @@ captures/
 # Secrets — client IDs live in source placeholders; never commit filled-in ICS URLs or keystores
 *.keystore
 *.jks
+
+# Local verification artifacts (emulator screenshots, pulled device DBs)
+docs/*.png
+docs/calmerge.db

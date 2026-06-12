@@ -1,9 +1,14 @@
 package dev.albert.calmerge.sync
 
+import android.util.Log
+import androidx.room.withTransaction
 import dev.albert.calmerge.data.db.AccountStatus
 import dev.albert.calmerge.data.db.AccountType
 import dev.albert.calmerge.data.db.AppDatabase
+import dev.albert.calmerge.data.db.ConflictClusterEntity
+import dev.albert.calmerge.data.db.ConflictMemberEntity
 import java.time.Instant
+import java.time.ZoneId
 import java.util.UUID
 
 /**
@@ -33,7 +38,26 @@ class SyncCoordinator(
                 db.accountDao().markSyncFailure(account.id, e.message ?: e.javaClass.simpleName, AccountStatus.ERROR)
             }
         }
-        recomputeDedupe()
+        try {
+            recomputeDerivedState(now)
+        } catch (e: Exception) {
+            Log.e("SyncCoordinator", "recomputeDerivedState failed", e)
+        }
+    }
+
+    /**
+     * Recomputes dedupe groups (FR-13) and the conflict cache (FR-17) in a single
+     * Room transaction so readers never see a partially-updated state.
+     *
+     * Dedupe groups are computed over ALL events (dedupeGroupId is also consumed
+     * by the agenda which filters by included separately). Conflict detection runs
+     * only over included events (FR-5).
+     */
+    suspend fun recomputeDerivedState(now: Instant = Instant.now()) {
+        db.withTransaction {
+            recomputeDedupe()
+            recomputeConflicts(now)
+        }
     }
 
     private suspend fun recomputeDedupe() {
@@ -42,5 +66,20 @@ class SyncCoordinator(
         for (group in Deduper.computeGroups(dao.getAll())) {
             dao.setDedupeGroup(UUID.randomUUID().toString(), group.eventIds)
         }
+    }
+
+    /** FR-17: conflict computation runs after every sync; results cached in SQLite. */
+    private suspend fun recomputeConflicts(now: Instant) {
+        // FR-5: only included events feed into conflict detection.
+        val events = db.eventInstanceDao().getAllIncluded()
+        val clusters = ConflictDetector.detect(events, ZoneId.systemDefault())
+        val clusterEntities = mutableListOf<ConflictClusterEntity>()
+        val memberEntities = mutableListOf<ConflictMemberEntity>()
+        for (memberIds in clusters) {
+            val clusterId = UUID.randomUUID().toString()
+            clusterEntities += ConflictClusterEntity(clusterId, now.toEpochMilli())
+            memberIds.forEach { memberEntities += ConflictMemberEntity(clusterId, it) }
+        }
+        db.conflictDao().replaceAll(clusterEntities, memberEntities)
     }
 }

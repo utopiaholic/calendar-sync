@@ -80,3 +80,34 @@ data class EventInstanceEntity(
     /** Events sharing a non-null group id are the same meeting seen from multiple accounts (FR-13). */
     val dedupeGroupId: String? = null,
 )
+
+/** FR-17: conflict results cached after each sync. */
+@Entity(tableName = "conflict_clusters")
+data class ConflictClusterEntity(
+    @PrimaryKey val id: String,
+    val computedAtUtc: Long,
+)
+
+@Entity(
+    tableName = "conflict_members",
+    primaryKeys = ["clusterId", "eventInstanceId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = ConflictClusterEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["clusterId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = EventInstanceEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["eventInstanceId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("eventInstanceId")],
+)
+data class ConflictMemberEntity(
+    val clusterId: String,
+    val eventInstanceId: String,
+)
