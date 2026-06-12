@@ -1,12 +1,5 @@
 package dev.albert.calmerge.ui
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -49,11 +41,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.albert.calmerge.data.db.MergedEvent
-import dev.albert.calmerge.ui.theme.ConflictRed
 import dev.albert.calmerge.ui.theme.OnSlateSecondary
 import dev.albert.calmerge.ui.theme.SlateDark3
 import dev.albert.calmerge.ui.theme.glassSurface
-import dev.albert.calmerge.ui.theme.isReduceMotion
 import java.time.ZoneId
 
 /**
@@ -198,7 +188,6 @@ private fun EventCard(
     zone: ZoneId,
     onClick: () -> Unit,
 ) {
-    val reduceMotion = isReduceMotion
     val haptic = LocalHapticFeedback.current
     val primaryColor = Color(copies.firstOrNull()?.accountColor ?: 0xFF39D0C8.toInt())
 
@@ -266,58 +255,11 @@ private fun EventCard(
                             },
                         contentAlignment = Alignment.Center,
                     ) {
-                        ConflictBadge(reduceMotion = reduceMotion)
+                        ConflictBadge()
                     }
                 }
             }
         }
     }
     Spacer(Modifier.height(4.dp))
-}
-
-@Composable
-private fun ConflictBadge(reduceMotion: Boolean) {
-    Box(contentAlignment = Alignment.Center) {
-        if (!reduceMotion) {
-            val infiniteTransition = rememberInfiniteTransition(label = "conflictPulse")
-            val scale by infiniteTransition.animateFloat(
-                initialValue = 1f,
-                targetValue = 1.5f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(900, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "haloScale",
-            )
-            val alpha by infiniteTransition.animateFloat(
-                initialValue = 0.4f,
-                targetValue = 0f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(900, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "haloAlpha",
-            )
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .scale(scale)
-                    .clip(CircleShape)
-                    .background(ConflictRed.copy(alpha = alpha)),
-            )
-        }
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .background(ConflictRed)
-                .padding(horizontal = 6.dp, vertical = 2.dp),
-        ) {
-            Text(
-                "!",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-    }
 }

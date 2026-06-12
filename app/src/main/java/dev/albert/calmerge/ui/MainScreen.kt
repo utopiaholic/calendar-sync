@@ -171,7 +171,13 @@ fun MainScreen(viewModel: MainViewModel) {
                         },
                     )
                     MainTab.AGENDA -> AgendaScreen(viewModel)
-                    MainTab.CALENDAR -> CalendarScreen(viewModel)
+                    MainTab.CALENDAR -> CalendarScreen(
+                        viewModel = viewModel,
+                        onOpenConflicts = {
+                            prevTabOrdinal = selectedTab.ordinal
+                            selectedTab = MainTab.CONFLICTS
+                        },
+                    )
                     MainTab.CONFLICTS -> ConflictsScreen(viewModel)
                 }
             }

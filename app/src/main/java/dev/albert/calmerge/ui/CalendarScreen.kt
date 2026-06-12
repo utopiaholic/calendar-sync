@@ -1,6 +1,7 @@
 package dev.albert.calmerge.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,15 +36,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import dev.albert.calmerge.ui.theme.ConflictRed
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.albert.calmerge.data.db.MergedEvent
+import dev.albert.calmerge.ui.theme.ConflictRed
+import dev.albert.calmerge.ui.theme.SlateDark3
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -52,6 +53,7 @@ import java.util.Locale
 private val HOUR_HEIGHT: Dp = 56.dp
 private val GUTTER_WIDTH: Dp = 40.dp
 private val TOTAL_HEIGHT: Dp = HOUR_HEIGHT * 24
+private const val MAX_WEEK_OVERLAP_COLUMNS = 2
 private val hourFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 enum class CalendarMode { DAY, WEEK }
@@ -62,7 +64,10 @@ enum class CalendarMode { DAY, WEEK }
  * and an all-day strip above the grid.
  */
 @Composable
-fun CalendarScreen(viewModel: MainViewModel) {
+fun CalendarScreen(
+    viewModel: MainViewModel,
+    onOpenConflicts: () -> Unit = {},
+) {
     val mergedEvents by viewModel.mergedEvents.collectAsState()
     val conflictedIds by viewModel.conflictedEventIds.collectAsState()
     val accounts by viewModel.accounts.collectAsState()
@@ -163,7 +168,11 @@ fun CalendarScreen(viewModel: MainViewModel) {
         }
 
         // ---- Scrollable time grid ----
-        Row(modifier = Modifier.fillMaxSize().verticalScroll(scrollState)) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState),
+        ) {
             // Hour gutter
             HourGutter()
 
@@ -177,7 +186,9 @@ fun CalendarScreen(viewModel: MainViewModel) {
                     copiesById = copiesById,
                     conflictedIds = conflictedIds,
                     isToday = date == LocalDate.now(zone),
+                    maxVisibleColumns = if (mode == CalendarMode.WEEK) MAX_WEEK_OVERLAP_COLUMNS else Int.MAX_VALUE,
                     onEventClick = { event, copies -> selectedEvent = event.toDetailModel(copies, icsHostById) },
+                    onOverlapMoreClick = onOpenConflicts,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -287,7 +298,9 @@ private fun DayColumn(
     copiesById: Map<String, List<MergedEvent>>,
     conflictedIds: Set<String>,
     isToday: Boolean,
+    maxVisibleColumns: Int,
     onEventClick: (MergedEvent, List<MergedEvent>) -> Unit,
+    onOverlapMoreClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Top offset matches HourGutter's 8.dp shift so hour lines align with labels.
@@ -314,12 +327,21 @@ private fun DayColumn(
 
         // Event blocks — use BoxWithConstraints width for correct x-offset.
         slots.forEach { slot ->
+            val visibleColumnCount = minOf(slot.columnCount, maxVisibleColumns)
+            if (slot.column >= visibleColumnCount) return@forEach
+
             val event = eventById[slot.eventId] ?: return@forEach
             val copies = copiesById[slot.eventId] ?: listOf(event)
             val inConflict = copies.any { it.event.id in conflictedIds }
             val color = Color(event.accountColor)
+            val eventShape = RoundedCornerShape(4.dp)
+            val eventBorder = if (inConflict) {
+                ConflictRed.copy(alpha = 0.9f)
+            } else {
+                color.copy(alpha = 0.5f)
+            }
 
-            val slotWidthDp = colWidthDp / slot.columnCount
+            val slotWidthDp = colWidthDp / visibleColumnCount
             val xOffsetDp = slotWidthDp * slot.column
             val yOffsetDp = TOTAL_HEIGHT * slot.startFraction
             val heightDp = maxOf(14.dp, TOTAL_HEIGHT * (slot.endFraction - slot.startFraction))
@@ -330,32 +352,104 @@ private fun DayColumn(
                     .height(heightDp)
                     .offset(x = xOffsetDp, y = yOffsetDp)
                     .padding(horizontal = 1.dp, vertical = 1.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(color.copy(alpha = 0.85f))
+                    .background(SlateDark3.copy(alpha = 0.96f), eventShape)
+                    .border(
+                        width = if (inConflict) 2.dp else 1.dp,
+                        color = eventBorder,
+                        shape = eventShape,
+                    )
                     .clickable { onEventClick(event, copies) },
             ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(4.dp)
+                        .background(color, RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp)),
+                )
                 Text(
                     text = event.event.title,
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(
+                        start = 7.dp,
+                        top = 2.dp,
+                        end = 3.dp,
+                        bottom = 2.dp,
+                    ),
                 )
-                if (inConflict) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(2.dp)
-                            .background(ConflictRed, RoundedCornerShape(2.dp))
-                            .padding(horizontal = 3.dp, vertical = 1.dp),
-                    ) {
-                        Text("!", color = Color.White, fontSize = 8.sp)
-                    }
-                }
+            }
+        }
+
+        denseOverlapSummaries(
+            slots = slots,
+            maxVisibleColumns = maxVisibleColumns,
+        ).forEach { summary ->
+            val yOffsetDp = TOTAL_HEIGHT * summary.startFraction
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(y = yOffsetDp + 4.dp)
+                    .padding(end = 3.dp)
+                    .background(SlateDark3.copy(alpha = 0.96f), RoundedCornerShape(999.dp))
+                    .border(1.dp, ConflictRed.copy(alpha = 0.75f), RoundedCornerShape(999.dp))
+                    .clickable(onClick = onOverlapMoreClick)
+                    .padding(horizontal = 5.dp, vertical = 1.dp),
+            ) {
+                Text(
+                    "+${summary.hiddenCount}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ConflictRed,
+                )
             }
         }
     }
+}
+
+private data class DenseOverlapSummary(
+    val startFraction: Float,
+    val hiddenCount: Int,
+)
+
+private fun denseOverlapSummaries(
+    slots: List<TimeGridLayout.TimedSlot>,
+    maxVisibleColumns: Int,
+): List<DenseOverlapSummary> {
+    if (maxVisibleColumns == Int.MAX_VALUE) return emptyList()
+    if (slots.none { it.columnCount > maxVisibleColumns }) return emptyList()
+
+    val sorted = slots.sortedBy { it.startFraction }
+    val summaries = mutableListOf<DenseOverlapSummary>()
+    var current = mutableListOf<TimeGridLayout.TimedSlot>()
+    var currentEnd = 0f
+
+    fun flush() {
+        if (current.isEmpty()) return
+        val hidden = current.count { it.column >= maxVisibleColumns }
+        if (hidden > 0) {
+            summaries += DenseOverlapSummary(
+                startFraction = current.minOf { it.startFraction },
+                hiddenCount = hidden,
+            )
+        }
+        current = mutableListOf()
+        currentEnd = 0f
+    }
+
+    sorted.forEach { slot ->
+        if (current.isEmpty() || slot.startFraction < currentEnd) {
+            current += slot
+            currentEnd = maxOf(currentEnd, slot.endFraction)
+        } else {
+            flush()
+            current += slot
+            currentEnd = slot.endFraction
+        }
+    }
+    flush()
+
+    return summaries
 }
 
 @Composable
@@ -382,7 +476,14 @@ private fun AllDayStrip(
                 daySlots.forEach { slot ->
                     val event = eventById[slot.eventId] ?: return@forEach
                     val copies = copiesById[slot.eventId] ?: listOf(event)
+                    val inConflict = copies.any { it.event.id in conflictedIds }
                     val color = Color(event.accountColor)
+                    val eventShape = RoundedCornerShape(4.dp)
+                    val eventBorder = if (inConflict) {
+                        ConflictRed.copy(alpha = 0.9f)
+                    } else {
+                        color.copy(alpha = 0.5f)
+                    }
                     val yOffset = rowHeight * slot.row + 2.dp
                     // Show the label pill on the event's start date OR on the first visible
                     // date when the event started before the visible range (fix #4).
@@ -394,17 +495,32 @@ private fun AllDayStrip(
                                 .fillMaxWidth()
                                 .height(rowHeight - 2.dp)
                                 .padding(horizontal = 1.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(color.copy(alpha = 0.85f))
+                                .background(SlateDark3.copy(alpha = 0.96f), eventShape)
+                                .border(
+                                    width = if (inConflict) 2.dp else 1.dp,
+                                    color = eventBorder,
+                                    shape = eventShape,
+                                )
                                 .clickable { onEventClick(event, copies) },
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(4.dp)
+                                    .background(color, RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp)),
+                            )
                             Text(
                                 event.event.title,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(horizontal = 3.dp).align(Alignment.CenterStart),
+                                modifier = Modifier
+                                    .padding(
+                                        start = 7.dp,
+                                        end = 3.dp,
+                                    )
+                                    .align(Alignment.CenterStart),
                             )
                         }
                     } else {
@@ -415,7 +531,10 @@ private fun AllDayStrip(
                                 .fillMaxWidth()
                                 .height(rowHeight - 2.dp)
                                 .padding(horizontal = 1.dp)
-                                .background(color.copy(alpha = 0.4f))
+                                .background(
+                                    if (inConflict) ConflictRed.copy(alpha = 0.18f) else color.copy(alpha = 0.4f),
+                                    RoundedCornerShape(3.dp),
+                                )
                                 .clickable { onEventClick(event, copies) },
                         )
                     }
