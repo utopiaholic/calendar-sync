@@ -113,7 +113,16 @@ ConflictMember(clusterId, eventInstanceId)
 - **M2 — Sync core:** auth + one-way sync for all three accounts into SQLite; CLI-style debug dump of merged events.
 - **M3 — Agenda + conflicts:** unified agenda view, conflict engine, conflicts tab.
 - **M4 — Calendar views + polish:** day/week views, deep links, settings, per-account colors, data wipe.
-- **M5 (optional):** widget + new-conflict notifications.
+- **M5 — Premium UI/UX overhaul:** Elevate the visual and interaction quality to a Spotify/Netflix standard.
+  - **Theme:** Dark mode first. Deep slate-blue base (`#0D1117` range) with glowing teal/soft-purple gradient accents. All surfaces use subtle glassmorphism (frosted blur + 10–15% opacity borders). Inter or system sans-serif at strict typographic scale.
+  - **Home/Dashboard:** Bento-grid cards for account status and quick filters; greeting header with today's date; animated streak/summary pill. Ample negative space — no dense lists on the home screen.
+  - **Agenda & Day/Week views:** Sticky section headers with blurred-glass effect on scroll; event cards with colored left-accent strip and smooth expand-on-tap detail sheet. Conflict badges glow red with a pulsing halo.
+  - **Conflicts tab:** Timeline-style cluster cards; overlap range shown as a visual bar, not just text; accounts badged with colored dots. Empty state illustration with friendly copy ("All clear — no conflicts ahead").
+  - **Navigation:** Dynamic bottom tab bar — icon + label below breakpoint, icon-only above; active tab indicator slides with spring animation. Tab bar hides on scroll-down, reappears on scroll-up (Spotify-style).
+  - **Micro-interactions:** Expanding ripple on tap, spring-physics sheet presentation, parallax depth on card scroll, skeleton shimmer for loading states, subtle haptic feedback on conflict badge tap.
+  - **Page transitions:** Shared-element transition into event detail; slide + fade between tabs; pull-to-refresh with custom animated indicator matching app palette.
+  - **Accessibility:** All touch targets ≥ 48 dp; WCAG AA contrast on all text/accent combos; reduce-motion respect via `WindowManager.ANIMATOR_DURATION_SCALE`.
+- **M6 (optional):** widget + new-conflict notifications.
 
 ## 10. Acceptance Criteria (v1 done when…)
 

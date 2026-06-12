@@ -2,19 +2,21 @@ package dev.albert.calmerge.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Card
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,16 +27,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.albert.calmerge.data.db.AccountStatus
 import dev.albert.calmerge.data.db.ConflictMemberRow
+import dev.albert.calmerge.ui.theme.ConflictRed
+import dev.albert.calmerge.ui.theme.OnSlateSecondary
+import dev.albert.calmerge.ui.theme.SlateDark3
+import dev.albert.calmerge.ui.theme.TealAccent
+import dev.albert.calmerge.ui.theme.glassCard
 import java.time.Instant
 import java.time.ZoneId
 
 /**
- * FR-21: dedicated list of conflict clusters, soonest first — the screen used
- * to plan manual fixes in the native calendar apps.
+ * FR-21: timeline-style conflict clusters, soonest first.
  */
 @Composable
 fun ConflictsScreen(viewModel: MainViewModel) {
@@ -55,38 +63,45 @@ fun ConflictsScreen(viewModel: MainViewModel) {
 
     if (clusters.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("No conflicts", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                // Friendly empty state
+                Text("✓", style = MaterialTheme.typography.headlineLarge, color = TealAccent)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "All clear",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "No conflicts ahead",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OnSlateSecondary,
+                )
                 if (failingAccounts.isNotEmpty()) {
-                    Spacer(Modifier.size(6.dp))
-                    Text(
-                        "Some feeds failed to sync:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                    Spacer(Modifier.height(16.dp))
                     failingAccounts.forEach { account ->
                         Text(
-                            "- ${account.displayName}: ${account.lastSyncError ?: account.status.name}",
+                            "⚠ ${account.displayName}: ${account.lastSyncError ?: account.status.name}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
-                } else {
-                    Spacer(Modifier.size(6.dp))
-                    Text(
-                        "Duplicated meetings across feeds are merged into one event.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
         }
         return
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item { Spacer(Modifier.height(4.dp)) }
         items(clusters, key = { it.clusterId }) { cluster ->
-            ConflictCard(
+            ConflictClusterCard(
                 cluster = cluster,
                 zone = zone,
                 onEventClick = { rep, copies ->
@@ -110,64 +125,185 @@ fun ConflictsScreen(viewModel: MainViewModel) {
                     )
                 },
             )
-            Spacer(Modifier.size(10.dp))
         }
+        item { Spacer(Modifier.height(8.dp)) }
     }
 }
 
 @Composable
-private fun ConflictCard(
+private fun ConflictClusterCard(
     cluster: ConflictClusterUi,
     zone: ZoneId,
     onEventClick: (ConflictMemberRow, List<ConflictMemberRow>) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            val timed = cluster.members.mapNotNull { (rep, _) -> rep.event.startUtc?.let { rep } }
-            val header = if (timed.isNotEmpty()) {
-                val clusterStartMs = timed.minOf { it.event.startUtc!! }
-                val startDate = Instant.ofEpochMilli(clusterStartMs).atZone(zone).toLocalDate()
-                // Overlap range: latest start to earliest end; falls back to the
-                // cluster's span for chained overlaps with no common intersection.
-                val overlapStart = timed.maxOf { it.event.startUtc!! }
-                val overlapEnd = timed.minOf { it.event.endUtc ?: it.event.startUtc!! }
-                val rangeText = if (overlapStart < overlapEnd) {
-                    val endDate = Instant.ofEpochMilli(overlapEnd).atZone(zone).toLocalDate()
-                    val endStr = if (endDate != startDate) {
-                        "${EventUi.dayHeaderFormat.format(endDate)} ${fmt(overlapEnd, zone)}"
-                    } else {
-                        fmt(overlapEnd, zone)
-                    }
-                    "Overlap ${fmt(overlapStart, zone)}–$endStr"
-                } else {
-                    val spanEndMs = timed.maxOf { it.event.endUtc ?: it.event.startUtc!! }
-                    val spanEndDate = Instant.ofEpochMilli(spanEndMs).atZone(zone).toLocalDate()
-                    val endStr = if (spanEndDate != startDate) {
-                        "${EventUi.dayHeaderFormat.format(spanEndDate)} ${fmt(spanEndMs, zone)}"
-                    } else {
-                        fmt(spanEndMs, zone)
-                    }
-                    "Chained ${fmt(clusterStartMs, zone)}–$endStr"
-                }
-                "${EventUi.dayHeaderFormat.format(startDate)} · $rangeText"
+    val timed = cluster.members.mapNotNull { (rep, _) -> rep.event.startUtc?.let { rep } }
+    val hasAllDay = cluster.members.any { (rep, _) -> rep.event.isAllDay }
+
+    // Compute overlap/span for the visual bar
+    data class BarData(
+        val clusterStartMs: Long,
+        val clusterEndMs: Long,
+        val overlapStartMs: Long?,
+        val overlapEndMs: Long?,
+        val headerText: String,
+        val isOverlap: Boolean,
+    )
+
+    val barData: BarData? = if (timed.size >= 2) {
+        val clusterStartMs = timed.minOf { it.event.startUtc!! }
+        val clusterEndMs = timed.maxOf { it.event.endUtc ?: it.event.startUtc!! }
+        val overlapStart = timed.maxOf { it.event.startUtc!! }
+        val overlapEnd = timed.minOf { it.event.endUtc ?: it.event.startUtc!! }
+        val startDate = Instant.ofEpochMilli(clusterStartMs).atZone(zone).toLocalDate()
+        val isOverlap = overlapStart < overlapEnd
+        val rangeMs = if (isOverlap) overlapStart to overlapEnd else null
+        val headerText = if (isOverlap) {
+            "${EventUi.dayHeaderFormat.format(startDate)} · Overlap ${fmt(overlapStart, zone)}–${fmt(overlapEnd, zone)}"
+        } else {
+            "${EventUi.dayHeaderFormat.format(startDate)} · Chained ${fmt(clusterStartMs, zone)}–${fmt(clusterEndMs, zone)}"
+        }
+        BarData(clusterStartMs, clusterEndMs, rangeMs?.first, rangeMs?.second, headerText, isOverlap)
+    } else {
+        null
+    }
+
+    // Header fallback: if fewer than 2 timed events exist, show all-day header
+    val effectiveHeaderText: String = barData?.headerText ?: run {
+        if (hasAllDay) {
+            val rawDate = cluster.members.firstOrNull()?.first?.event?.startDate ?: "?"
+            val formattedDate = runCatching {
+                EventUi.dayHeaderFormat.format(java.time.LocalDate.parse(rawDate))
+            }.getOrElse { rawDate }
+            "$formattedDate · All-day overlap"
+        } else {
+            val rawDate = cluster.members.firstOrNull()?.first?.event?.startDate ?: "?"
+            val formattedDate = runCatching {
+                EventUi.dayHeaderFormat.format(java.time.LocalDate.parse(rawDate))
+            }.getOrElse { rawDate }
+            "$formattedDate · All-day overlap"
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassCard(cornerRadius = 14.dp, fillAlpha = 0.07f)
+            .padding(16.dp),
+    ) {
+        // Header with conflict indicator
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(ConflictRed),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                effectiveHeaderText,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = ConflictRed,
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Visual overlap bar
+        if (barData != null) {
+            OverlapBar(
+                clusterStartMs = barData.clusterStartMs,
+                clusterEndMs = barData.clusterEndMs,
+                overlapStartMs = barData.overlapStartMs,
+                overlapEndMs = barData.overlapEndMs,
+                members = cluster.members,
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // Member rows
+        cluster.members.forEachIndexed { index, (rep, copies) ->
+            if (index > 0) Spacer(Modifier.height(6.dp))
+            ConflictMemberItem(rep, copies, zone, onClick = { onEventClick(rep, copies) })
+        }
+    }
+}
+
+@Composable
+private fun OverlapBar(
+    clusterStartMs: Long,
+    clusterEndMs: Long,
+    overlapStartMs: Long?,
+    overlapEndMs: Long?,
+    members: List<Pair<ConflictMemberRow, List<ConflictMemberRow>>>,
+) {
+    val totalSpan = (clusterEndMs - clusterStartMs).coerceAtLeast(1L)
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // One bar per member event
+        members.forEach { (rep, copies) ->
+            // All-day events render as full-width bars; timed events use their UTC fractions.
+            val startFrac = if (rep.event.isAllDay || rep.event.startUtc == null) {
+                0f
             } else {
-                val rawDate = cluster.members.firstOrNull()?.first?.event?.startDate ?: "?"
-                val formattedDate = runCatching {
-                    EventUi.dayHeaderFormat.format(java.time.LocalDate.parse(rawDate))
-                }.getOrElse { rawDate }
-                "$formattedDate · All-day overlap"
+                ((rep.event.startUtc - clusterStartMs).toFloat() / totalSpan).coerceIn(0f, 1f)
             }
-            Text(header, style = MaterialTheme.typography.titleSmall, color = Color(0xFFD93025))
-            Spacer(Modifier.size(6.dp))
-            cluster.members.forEach { (rep, copies) ->
-                MemberRow(rep, copies, zone, onClick = { onEventClick(rep, copies) })
+            val endFrac = if (rep.event.isAllDay || rep.event.startUtc == null) {
+                1f
+            } else {
+                val evtEnd = rep.event.endUtc ?: rep.event.startUtc
+                ((evtEnd - clusterStartMs).toFloat() / totalSpan).coerceIn(0f, 1f)
+            }
+            val color = Color(copies.firstOrNull()?.accountColor ?: 0xFF39D0C8.toInt())
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(20.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(SlateDark3),
+            ) {
+                // Event span bar
+                Row {
+                    if (startFrac > 0f) {
+                        Spacer(Modifier.weight(startFrac))
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight((endFrac - startFrac).coerceAtLeast(0.02f))
+                            .height(20.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(color.copy(alpha = 0.5f)),
+                    )
+                    val afterFrac = 1f - endFrac
+                    if (afterFrac > 0f) {
+                        Spacer(Modifier.weight(afterFrac))
+                    }
+                }
+
+                // Overlap highlight
+                if (overlapStartMs != null && overlapEndMs != null) {
+                    val oStart = ((overlapStartMs - clusterStartMs).toFloat() / totalSpan).coerceIn(0f, 1f)
+                    val oEnd = ((overlapEndMs - clusterStartMs).toFloat() / totalSpan).coerceIn(0f, 1f)
+                    Row {
+                        if (oStart > 0f) Spacer(Modifier.weight(oStart))
+                        Box(
+                            modifier = Modifier
+                                .weight((oEnd - oStart).coerceAtLeast(0.02f))
+                                .height(20.dp)
+                                .background(ConflictRed.copy(alpha = 0.35f)),
+                        )
+                        val after = 1f - oEnd
+                        if (after > 0f) Spacer(Modifier.weight(after))
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun MemberRow(
+private fun ConflictMemberItem(
     rep: ConflictMemberRow,
     copies: List<ConflictMemberRow>,
     zone: ZoneId,
@@ -177,18 +313,27 @@ private fun MemberRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 3.dp),
+            .padding(vertical = 6.dp, horizontal = 4.dp),
     ) {
-        Row {
-            copies.distinctBy { it.accountId }.forEach {
-                Spacer(Modifier.size(10.dp).background(Color(it.accountColor), CircleShape))
-                Spacer(Modifier.width(2.dp))
+        // Account colored dots
+        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            copies.distinctBy { it.accountId }.forEach { copy ->
+                Spacer(
+                    Modifier
+                        .size(9.dp)
+                        .background(Color(copy.accountColor), CircleShape),
+                )
             }
         }
-        Spacer(Modifier.width(8.dp))
-        Column {
-            Text(rep.event.title, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                rep.event.title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+            )
             val time = if (rep.event.isAllDay) {
                 "All day"
             } else {
@@ -198,7 +343,7 @@ private fun MemberRow(
             Text(
                 "$time · ${rep.event.showAs} · $badge",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = OnSlateSecondary,
             )
         }
     }

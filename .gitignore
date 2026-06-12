@@ -17,3 +17,6 @@ captures/
 # Local verification artifacts (emulator screenshots, pulled device DBs)
 docs/*.png
 docs/calmerge.db
+
+# iteration screenshots
+/*.png

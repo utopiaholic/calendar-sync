@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import dev.albert.calmerge.ui.theme.ConflictRed
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -346,7 +347,7 @@ private fun DayColumn(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(2.dp)
-                            .background(Color(0xFFD93025), RoundedCornerShape(2.dp))
+                            .background(ConflictRed, RoundedCornerShape(2.dp))
                             .padding(horizontal = 3.dp, vertical = 1.dp),
                     ) {
                         Text("!", color = Color.White, fontSize = 8.sp)

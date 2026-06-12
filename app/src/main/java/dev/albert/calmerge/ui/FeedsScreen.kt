@@ -39,6 +39,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.albert.calmerge.BuildConfig
 import dev.albert.calmerge.data.db.AccountEntity
@@ -150,14 +154,21 @@ fun FeedsScreen(viewModel: MainViewModel) {
 @Composable
 private fun AccountRow(account: AccountEntity, now: Long, onRemove: () -> Unit, onColorClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        // FR-19: tapping the color dot opens the palette picker.
+        // FR-19: tapping the color dot opens the palette picker. 48dp touch target wraps the 22dp dot.
         Box(
             modifier = Modifier
-                .size(22.dp)
-                .clip(CircleShape)
-                .background(Color(account.color))
+                .size(48.dp)
+                .semantics { role = Role.Button; contentDescription = "Change color for ${account.displayName}" }
                 .clickable(onClick = onColorClick),
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(Color(account.color)),
+            )
+        }
         Spacer(Modifier.width(6.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(account.displayName, style = MaterialTheme.typography.bodyMedium)
