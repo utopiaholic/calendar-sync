@@ -38,8 +38,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.calmerge.app.data.db.MergedEvent
-import com.calmerge.app.ui.theme.OnSlateSecondary
-import com.calmerge.app.ui.theme.SlateDark3
 import com.calmerge.app.ui.theme.DefaultAccountColor
 import com.calmerge.app.ui.theme.glassSurface
 import java.time.ZoneId
@@ -106,7 +104,7 @@ fun AgendaScreen(viewModel: MainViewModel) {
                     Text(
                         if (filter == AgendaFilter.UPCOMING) "Nothing upcoming" else "No past events",
                         style = MaterialTheme.typography.bodySmall,
-                        color = OnSlateSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -181,7 +179,7 @@ private fun EventCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
-                .background(SlateDark3)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -200,7 +198,7 @@ private fun EventCard(
                         Text(
                             EventUi.timeRangeText(rep, zone),
                             style = MaterialTheme.typography.bodySmall,
-                            color = OnSlateSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         copies.distinctBy { it.accountId }.forEach { copy ->
                             Spacer(

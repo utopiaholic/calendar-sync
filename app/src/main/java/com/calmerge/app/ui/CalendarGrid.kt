@@ -19,12 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.calmerge.app.data.db.MergedEvent
 import com.calmerge.app.ui.theme.ConflictRed
-import com.calmerge.app.ui.theme.SlateDark3
 import java.time.LocalDate
 
 internal val HOUR_HEIGHT: Dp = 56.dp
@@ -94,11 +94,22 @@ internal fun DayColumn(
             val copies = copiesById[slot.eventId] ?: listOf(event)
             val inConflict = copies.any { it.event.id in conflictedIds }
             val color = Color(event.accountColor)
+            val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+            val eventBackground = if (isLightTheme) {
+                color.copy(alpha = 0.12f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f)
+            }
+            val eventTextColor = if (isLightTheme) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                Color.White
+            }
             val eventShape = RoundedCornerShape(4.dp)
             val eventBorder = if (inConflict) {
                 ConflictRed.copy(alpha = 0.9f)
             } else {
-                color.copy(alpha = 0.5f)
+                color.copy(alpha = if (isLightTheme) 0.72f else 0.5f)
             }
 
             val slotWidthDp = colWidthDp / visibleColumnCount
@@ -112,7 +123,7 @@ internal fun DayColumn(
                     .height(heightDp)
                     .offset(x = xOffsetDp, y = yOffsetDp)
                     .padding(horizontal = 1.dp, vertical = 1.dp)
-                    .background(SlateDark3.copy(alpha = 0.96f), eventShape)
+                    .background(eventBackground, eventShape)
                     .border(
                         width = if (inConflict) 2.dp else 1.dp,
                         color = eventBorder,
@@ -129,7 +140,7 @@ internal fun DayColumn(
                 Text(
                     text = event.event.title,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
+                    color = eventTextColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(
@@ -152,7 +163,7 @@ internal fun DayColumn(
                     .align(Alignment.TopEnd)
                     .offset(y = yOffsetDp + 4.dp)
                     .padding(end = 3.dp)
-                    .background(SlateDark3.copy(alpha = 0.96f), RoundedCornerShape(999.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f), RoundedCornerShape(999.dp))
                     .border(1.dp, ConflictRed.copy(alpha = 0.75f), RoundedCornerShape(999.dp))
                     .clickable(onClick = onOverlapMoreClick)
                     .padding(horizontal = 5.dp, vertical = 1.dp),

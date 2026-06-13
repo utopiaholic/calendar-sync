@@ -51,7 +51,11 @@ internal fun AccountRow(account: AccountEntity, now: Long, onRemove: () -> Unit,
         Spacer(Modifier.width(6.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(account.displayName, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    account.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
                 Spacer(Modifier.width(6.dp))
                 SourceTypeChip(account.type)
             }

@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+enum class ThemePreference { SYSTEM, LIGHT, DARK }
+
 /**
  * Persists user-adjustable settings via SharedPreferences.
  * Exposed as StateFlow so Compose screens react to changes without restarting.
@@ -25,6 +27,19 @@ class SettingsStore(context: Context) {
     fun setSyncInterval(minutes: Long) {
         prefs.edit().putLong(KEY_SYNC_INTERVAL, minutes).apply()
         _syncIntervalMinutes.value = minutes
+    }
+
+    // ---- Appearance ----
+    private val _themePreference = MutableStateFlow(
+        prefs.getString(KEY_THEME_PREFERENCE, null)?.let { saved ->
+            ThemePreference.entries.firstOrNull { it.name == saved }
+        } ?: ThemePreference.SYSTEM
+    )
+    val themePreference: StateFlow<ThemePreference> = _themePreference.asStateFlow()
+
+    fun setThemePreference(preference: ThemePreference) {
+        prefs.edit().putString(KEY_THEME_PREFERENCE, preference.name).apply()
+        _themePreference.value = preference
     }
 
     // ---- Conflict config (FR-14, FR-15) ----
@@ -73,6 +88,7 @@ class SettingsStore(context: Context) {
         const val DEFAULT_LOOKAHEAD_DAYS = 7
 
         private const val KEY_SYNC_INTERVAL = "sync_interval_minutes"
+        private const val KEY_THEME_PREFERENCE = "theme_preference"
         private const val KEY_INCLUDE_TENTATIVE = "conflict_include_tentative"
         private const val KEY_INCLUDE_OOF = "conflict_include_oof"
         private const val KEY_ALLDAY_CONFLICTS_TIMED = "conflict_allday_vs_timed"

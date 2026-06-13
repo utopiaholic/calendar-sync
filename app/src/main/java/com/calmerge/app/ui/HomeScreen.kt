@@ -46,10 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.calmerge.app.data.db.AccountStatus
 import com.calmerge.app.ui.theme.ConflictRed
-import com.calmerge.app.ui.theme.OnSlateSecondary
-import com.calmerge.app.ui.theme.SlateDark3
-import com.calmerge.app.ui.theme.SlateSurface
-import com.calmerge.app.ui.theme.TealAccent
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -90,6 +86,7 @@ fun HomeScreen(
     val nextCluster = remember(windowedClusters) { windowedClusters.firstOrNull() }
     val activeFeeds = accounts.filter { it.status == AccountStatus.ACTIVE }
     val failingFeeds = accounts.filter { it.status != AccountStatus.ACTIVE }
+    val mutedColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Column(
         modifier = Modifier
@@ -112,14 +109,14 @@ fun HomeScreen(
                 Text(
                     today.format(DateTimeFormatter.ofPattern("EEEE, MMM d", Locale.getDefault())),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = OnSlateSecondary,
+                    color = mutedColor,
                 )
             }
             IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier.offset(x = 12.dp),
             ) {
-                Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = OnSlateSecondary)
+                Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = mutedColor)
             }
         }
 
@@ -137,7 +134,7 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(24.dp))
-                    .background(SlateSurface)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 val parts = buildList {
@@ -147,7 +144,7 @@ fun HomeScreen(
                 Text(
                     parts.joinToString("  ·  "),
                     style = MaterialTheme.typography.labelLarge,
-                    color = TealAccent,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -164,11 +161,11 @@ fun HomeScreen(
                 modifier = Modifier.weight(1f),
                 onClick = onOpenFeeds,
             ) {
-                Text("Calendars", style = MaterialTheme.typography.titleSmall, color = OnSlateSecondary)
+                Text("Calendars", style = MaterialTheme.typography.titleSmall, color = mutedColor)
                 Spacer(Modifier.height(8.dp))
                 if (accounts.isEmpty()) {
                     Text("No calendars yet", style = MaterialTheme.typography.bodyMedium)
-                    Text("Tap to add", style = MaterialTheme.typography.bodySmall, color = OnSlateSecondary)
+                    Text("Tap to add", style = MaterialTheme.typography.bodySmall, color = mutedColor)
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         accounts.take(4).forEach { acc ->
@@ -197,7 +194,7 @@ fun HomeScreen(
                         Text(
                             if (lastSync != null) "Synced ${relativeTime(lastSync)}" else "Not synced",
                             style = MaterialTheme.typography.bodySmall,
-                            color = OnSlateSecondary,
+                            color = mutedColor,
                         )
                     }
                 }
@@ -213,7 +210,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Upcoming Conflicts", style = MaterialTheme.typography.titleSmall, color = OnSlateSecondary)
+                    Text("Upcoming Conflicts", style = MaterialTheme.typography.titleSmall, color = mutedColor)
                     if (windowedClusters.isNotEmpty()) {
                         Icon(
                             Icons.Rounded.Warning,
@@ -229,9 +226,9 @@ fun HomeScreen(
                         "All clear",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = TealAccent,
+                        color = MaterialTheme.colorScheme.primary,
                     )
-                    Text("No conflicts ahead", style = MaterialTheme.typography.bodySmall, color = OnSlateSecondary)
+                    Text("No conflicts ahead", style = MaterialTheme.typography.bodySmall, color = mutedColor)
                 } else {
                     Text(
                         "${windowedClusters.size}",
@@ -249,7 +246,7 @@ fun HomeScreen(
                             }
                         }
                     } ?: "All-day"
-                    Text(clusterTimeText, style = MaterialTheme.typography.bodySmall, color = OnSlateSecondary)
+                    Text(clusterTimeText, style = MaterialTheme.typography.bodySmall, color = mutedColor)
                 }
             }
         }
@@ -267,11 +264,11 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Today", style = MaterialTheme.typography.titleSmall, color = OnSlateSecondary)
+                Text("Today", style = MaterialTheme.typography.titleSmall, color = mutedColor)
                 Text(
                     "${todayEvents.size} events",
                     style = MaterialTheme.typography.labelMedium,
-                    color = TealAccent,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
             Spacer(Modifier.height(10.dp))
@@ -279,7 +276,7 @@ fun HomeScreen(
                 Text(
                     "No events scheduled",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = OnSlateSecondary,
+                    color = mutedColor,
                 )
             } else {
                 todayEvents
@@ -316,7 +313,7 @@ fun HomeScreen(
                                 Text(
                                     timeStr,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = OnSlateSecondary,
+                                    color = mutedColor,
                                 )
                             }
                         }
@@ -325,7 +322,7 @@ fun HomeScreen(
                     Text(
                         "+${todayEvents.size - 3} more",
                         style = MaterialTheme.typography.bodySmall,
-                        color = OnSlateSecondary,
+                        color = mutedColor,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
@@ -339,10 +336,10 @@ fun HomeScreen(
             onClick = { viewModel.syncNow() },
             enabled = !syncing && accounts.isNotEmpty(),
             colors = ButtonDefaults.buttonColors(
-                containerColor = SlateDark3,
-                contentColor = TealAccent,
-                disabledContainerColor = SlateSurface,
-                disabledContentColor = OnSlateSecondary,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.primary,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                disabledContentColor = mutedColor,
             ),
             shape = RoundedCornerShape(24.dp),
             modifier = Modifier.fillMaxWidth(),
@@ -351,7 +348,7 @@ fun HomeScreen(
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
                     strokeWidth = 2.dp,
-                    color = TealAccent,
+                    color = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Syncing…")

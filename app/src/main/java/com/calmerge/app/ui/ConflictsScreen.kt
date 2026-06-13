@@ -28,9 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.calmerge.app.data.db.AccountStatus
-import com.calmerge.app.ui.theme.OnSlateSecondary
-import com.calmerge.app.ui.theme.SlateSurface
-import com.calmerge.app.ui.theme.TealAccent
 import java.time.ZoneId
 
 private enum class ConflictTab { UPCOMING, PAST }
@@ -84,7 +81,7 @@ fun ConflictsScreen(viewModel: MainViewModel) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(32.dp),
                 ) {
-                    Text("✓", style = MaterialTheme.typography.headlineLarge, color = TealAccent)
+                    Text("✓", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.height(12.dp))
                     Text(
                         "All clear",
@@ -95,7 +92,7 @@ fun ConflictsScreen(viewModel: MainViewModel) {
                     Text(
                         if (tab == ConflictTab.UPCOMING) "No conflicts ahead" else "No past conflicts",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = OnSlateSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (tab == ConflictTab.UPCOMING && failingAccounts.isNotEmpty()) {
                         Spacer(Modifier.height(16.dp))
@@ -178,14 +175,14 @@ private fun ConflictSectionSeparator(label: String) {
             modifier = Modifier
                 .padding(horizontal = 12.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(SlateSurface)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(horizontal = 14.dp, vertical = 5.dp),
         ) {
             Text(
                 label,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = OnSlateSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         HorizontalDivider(

@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.calmerge.app.ui.theme.ConflictRed
-import com.calmerge.app.ui.theme.SlateDark
 
 @Composable
 fun ConflictBadge(
@@ -32,7 +31,7 @@ fun ConflictBadge(
                     .size(badgeSize)
                     .clip(CircleShape)
                     .background(ConflictRed)
-                    .border(1.dp, SlateDark.copy(alpha = 0.9f), CircleShape),
+                    .border(1.dp, MaterialTheme.colorScheme.background.copy(alpha = 0.9f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -47,7 +46,7 @@ fun ConflictBadge(
                 modifier = Modifier
                     .clip(MaterialTheme.shapes.small)
                     .background(ConflictRed)
-                    .border(1.dp, SlateDark.copy(alpha = 0.85f), MaterialTheme.shapes.small)
+                    .border(1.dp, MaterialTheme.colorScheme.background.copy(alpha = 0.85f), MaterialTheme.shapes.small)
                     .padding(horizontal = 7.dp, vertical = 3.dp),
             ) {
                 Text(

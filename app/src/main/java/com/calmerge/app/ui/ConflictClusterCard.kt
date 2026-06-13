@@ -26,8 +26,6 @@ import androidx.compose.ui.unit.dp
 import com.calmerge.app.data.db.ConflictMemberRow
 import com.calmerge.app.ui.theme.ConflictRed
 import com.calmerge.app.ui.theme.DefaultAccountColor
-import com.calmerge.app.ui.theme.OnSlateSecondary
-import com.calmerge.app.ui.theme.SlateDark3
 import com.calmerge.app.ui.theme.glassCard
 import java.time.Instant
 import java.time.ZoneId
@@ -147,7 +145,7 @@ private fun OverlapBar(
                     .fillMaxWidth()
                     .height(20.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(SlateDark3),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
                 Row {
                     if (startFrac > 0f) {
@@ -175,7 +173,7 @@ private fun OverlapBar(
                             modifier = Modifier
                                 .weight((oEnd - oStart).coerceAtLeast(0.02f))
                                 .height(20.dp)
-                                .background(ConflictRed.copy(alpha = 0.35f)),
+                                .background(ConflictRed),
                         )
                         val after = 1f - oEnd
                         if (after > 0f) Spacer(Modifier.weight(after))
@@ -226,7 +224,7 @@ private fun ConflictMemberItem(
             Text(
                 "$time · ${rep.event.showAs} · $badge",
                 style = MaterialTheme.typography.bodySmall,
-                color = OnSlateSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

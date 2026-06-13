@@ -1,6 +1,7 @@
 package com.calmerge.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,13 +9,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.calmerge.app.data.db.AccountEntity
 import kotlinx.coroutines.delay
 
@@ -44,6 +51,7 @@ fun FeedsScreen(viewModel: MainViewModel) {
     var showChooser by remember { mutableStateOf(false) }
     var showIcsDialog by remember { mutableStateOf(false) }
     var showLocalPicker by remember { mutableStateOf(false) }
+    var showOutlookGuide by remember { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<AccountEntity?>(null) }
     var colorPickerTarget by remember { mutableStateOf<AccountEntity?>(null) }
 
@@ -76,6 +84,10 @@ fun FeedsScreen(viewModel: MainViewModel) {
 
     if (showChooser) {
         AddCalendarChooser(
+            onOutlook = {
+                showChooser = false
+                showOutlookGuide = true
+            },
             onFromPhone = {
                 showChooser = false
                 showLocalPicker = true
@@ -85,6 +97,20 @@ fun FeedsScreen(viewModel: MainViewModel) {
                 showIcsDialog = true
             },
             onDismiss = { showChooser = false },
+        )
+    }
+
+    if (showOutlookGuide) {
+        OutlookGuide(
+            onCalendarsFound = {
+                showOutlookGuide = false
+                showLocalPicker = true
+            },
+            onUseLink = {
+                showOutlookGuide = false
+                showIcsDialog = true
+            },
+            onDismiss = { showOutlookGuide = false },
         )
     }
 
@@ -104,6 +130,10 @@ fun FeedsScreen(viewModel: MainViewModel) {
         LocalCalendarPicker(
             viewModel = viewModel,
             alreadyImportedSourceIds = sources.map { it.providerCalendarId }.toSet(),
+            onNeedHelp = {
+                showLocalPicker = false
+                showOutlookGuide = true
+            },
             onDismiss = { showLocalPicker = false },
         )
     }
@@ -165,44 +195,63 @@ fun FeedsScreen(viewModel: MainViewModel) {
 
 @Composable
 private fun AddCalendarChooser(
+    onOutlook: () -> Unit,
     onFromPhone: () -> Unit,
     onFromLink: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add calendar") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 420.dp)
+                .padding(horizontal = 24.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 12.dp),
+            ) {
+                Text("Add calendar", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(20.dp))
                 ChooserOption(
-                    title = "Use calendars on this phone",
+                    iconPackageName = OUTLOOK_PACKAGE,
+                    title = "Outlook calendar",
+                    subtitle = "Use the Outlook app or a published calendar link.",
+                    onClick = onOutlook,
+                )
+                HorizontalDivider()
+                ChooserOption(
+                    iconPackageName = GOOGLE_CALENDAR_PACKAGE,
+                    title = "Google & phone calendars",
                     subtitle = "Import calendars already synced to Android.",
                     onClick = onFromPhone,
                 )
                 HorizontalDivider()
                 ChooserOption(
+                    iconPackageName = null,
                     title = "Paste calendar link",
                     subtitle = "Use an ICS/iCal subscription URL.",
                     onClick = onFromLink,
                 )
-                HorizontalDivider()
-                ChooserOption(
-                    title = "Sign in with Microsoft or Google",
-                    subtitle = "Coming later.",
-                    onClick = {},
-                    enabled = false,
-                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
+        }
+    }
 }
 
 @Composable
 private fun ChooserOption(
+    iconPackageName: String?,
     title: String,
     subtitle: String,
     onClick: () -> Unit,
@@ -213,17 +262,30 @@ private fun ChooserOption(
         enabled = enabled,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AppIcon(
+                packageName = iconPackageName,
+                contentDescription = null,
+                size = 34.dp,
             )
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

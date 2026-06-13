@@ -30,9 +30,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.calmerge.app.settings.SettingsStore
+import com.calmerge.app.settings.ThemePreference
 
 private val SYNC_OPTIONS = listOf(
     15L to "Every 15 minutes",
@@ -49,9 +49,16 @@ private val LOOKAHEAD_OPTIONS = listOf(
     30 to "Next month",
 )
 
+private val THEME_OPTIONS = listOf(
+    ThemePreference.SYSTEM to "Use device setting",
+    ThemePreference.LIGHT to "Light",
+    ThemePreference.DARK to "Dark",
+)
+
 @Composable
 fun SettingsScreen(viewModel: MainViewModel, onOpenFeeds: () -> Unit = {}) {
     val syncInterval by viewModel.syncIntervalMinutes.collectAsState()
+    val themePreference by viewModel.themePreference.collectAsState()
     val includeTentative by viewModel.includeTentative.collectAsState()
     val includeOof by viewModel.includeOof.collectAsState()
     val allDayVsTimed by viewModel.allDayConflictsWithTimed.collectAsState()
@@ -95,6 +102,25 @@ fun SettingsScreen(viewModel: MainViewModel, onOpenFeeds: () -> Unit = {}) {
             TextButton(onClick = onOpenFeeds) {
                 Text("Open")
                 Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null)
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ---- Appearance ----
+        SectionHeader("Appearance")
+        THEME_OPTIONS.forEach { (preference, label) ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                RadioButton(
+                    selected = themePreference == preference,
+                    onClick = { viewModel.setThemePreference(preference) },
+                )
+                Text(label, style = MaterialTheme.typography.bodyMedium)
             }
         }
 

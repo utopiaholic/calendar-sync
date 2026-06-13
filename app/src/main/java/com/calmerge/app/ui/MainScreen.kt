@@ -52,7 +52,6 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
-import com.calmerge.app.ui.theme.SlateDark2
 
 private enum class MainTab(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Rounded.Home),
@@ -105,7 +104,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                 ) + fadeOut(tween(100)),
             ) {
-                NavigationBar(containerColor = SlateDark2) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     MainTab.entries.forEach { tab ->
                         val selected = selectedTab == tab && subScreen == null
                         NavigationBarItem(
@@ -241,6 +240,8 @@ private fun SubScreenShell(
             Spacer(Modifier.width(4.dp))
             Text(title, style = MaterialTheme.typography.titleLarge)
         }
-        content()
+        Box(modifier = Modifier.weight(1f)) {
+            content()
+        }
     }
 }

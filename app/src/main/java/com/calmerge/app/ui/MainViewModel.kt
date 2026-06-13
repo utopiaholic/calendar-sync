@@ -10,7 +10,10 @@ import com.calmerge.app.data.db.AccountType
 import com.calmerge.app.data.db.CalendarSourceEntity
 import com.calmerge.app.data.db.ConflictMemberRow
 import com.calmerge.app.data.db.MergedEvent
+import com.calmerge.app.settings.ThemePreference
 import com.calmerge.app.sync.DeviceCalendar
+import com.calmerge.app.ui.theme.AccountColorPalette
+import com.calmerge.app.ui.theme.ConflictReservedAccountColors
 import com.calmerge.app.work.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -38,19 +41,12 @@ data class ConflictClusterUi(
 
 class MainViewModel(private val app: CalMergeApp) : ViewModel() {
 
-    /** Distinct badge colors assigned to feeds in connect order; cycles by usage count only when palette exhausted. */
-    val palette = listOf(
-        0xFF1A73E8.toInt(), // blue
-        0xFFD93025.toInt(), // red
-        0xFF188038.toInt(), // green
-        0xFFF9AB00.toInt(), // amber
-        0xFF9334E6.toInt(), // purple
-        0xFF12A4AF.toInt(), // teal
-        0xFFE8710A.toInt(), // orange
-        0xFFB80672.toInt(), // magenta
-        0xFF5F6368.toInt(), // grey
-        0xFF7CB342.toInt(), // light green
-    )
+    /** Distinct feed colors. Warm warning/error hues are reserved for conflict states. */
+    val palette = AccountColorPalette
+
+    init {
+        viewModelScope.launch { migrateReservedAccountColors() }
+    }
 
     val accounts: StateFlow<List<AccountEntity>> = app.db.accountDao().observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -226,6 +222,7 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
     val includeOof: StateFlow<Boolean> = app.settings.includeOof
     val allDayConflictsWithTimed: StateFlow<Boolean> = app.settings.allDayConflictsWithTimed
     val conflictLookaheadDays: StateFlow<Int> = app.settings.conflictLookaheadDays
+    val themePreference: StateFlow<ThemePreference> = app.settings.themePreference
 
     fun setSyncInterval(minutes: Long) {
         app.settings.setSyncInterval(minutes)
@@ -254,6 +251,10 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
 
     fun setConflictLookaheadDays(days: Int) {
         app.settings.setConflictLookaheadDays(days)
+    }
+
+    fun setThemePreference(preference: ThemePreference) {
+        app.settings.setThemePreference(preference)
     }
 
     /** NFR-6: wipe all accounts and events (cascade). */
@@ -291,6 +292,26 @@ class MainViewModel(private val app: CalMergeApp) : ViewModel() {
         if (unused != null) return unused
         // All palette colors are in use — cycle by least-used.
         val usageCounts = palette.associateWith { color -> accounts.value.count { it.color == color } }
+        return palette.minByOrNull { usageCounts[it] ?: 0 } ?: palette[0]
+    }
+
+    private suspend fun migrateReservedAccountColors() {
+        val assigned = app.db.accountDao().getAll().map { it.id to it.color }.toMutableList()
+        assigned.forEachIndexed { index, (accountId, color) ->
+            if (color in ConflictReservedAccountColors) {
+                val replacement = nextAvailableColor(assigned.map { it.second })
+                assigned[index] = accountId to replacement
+                app.db.accountDao().updateColor(accountId, replacement)
+            }
+        }
+    }
+
+    private fun nextAvailableColor(colors: List<Int>): Int {
+        val usedColors = colors.toSet()
+        val unused = palette.firstOrNull { it !in usedColors }
+        if (unused != null) return unused
+
+        val usageCounts = palette.associateWith { color -> colors.count { it == color } }
         return palette.minByOrNull { usageCounts[it] ?: 0 } ?: palette[0]
     }
 

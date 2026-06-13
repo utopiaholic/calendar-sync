@@ -6,6 +6,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
 
+    <queries>
+        <package android:name="com.google.android.calendar" />
+        <package android:name="com.microsoft.office.outlook" />
+    </queries>
+
     <application
         android:name=".CalMergeApp"
         android:allowBackup="false"
